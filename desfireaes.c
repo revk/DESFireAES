@@ -695,48 +695,6 @@ df_create_application (df_t * d, unsigned char aid[3], unsigned char settings, u
 }
 
 const char *
-df_create_stddatafile (df_t * d, unsigned char fileno, unsigned char comms, unsigned short access, unsigned int len)
-{
-   unsigned char buf[32],
-     n = 0;
-   buf1 (fileno);
-   buf1 (comms);
-   buf2 (access);
-   buf3 (len);
-   return df_txrx (d, 0xCD, n, buf, sizeof (buf), 0, NULL, 0);
-}
-
-const char *
-df_create_cyclicrecordfile (df_t * d, unsigned char fileno, unsigned char comms, unsigned short access, unsigned int rsize,
-                            unsigned int maxrecs)
-{
-   unsigned char buf[32],
-     n = 0;
-   buf1 (fileno);
-   buf1 (comms);
-   buf2 (access);
-   buf3 (rsize);
-   buf3 (maxrecs);
-   return df_txrx (d, 0xC0, n, buf, sizeof (buf), 0, NULL, 0);
-}
-
-const char *
-df_create_valuefile (df_t * d, unsigned char fileno, unsigned char comms, unsigned short access, unsigned int min, unsigned int max,
-                     unsigned int value, unsigned char limited)
-{
-   unsigned char buf[32],
-     n = 0;
-   buf1 (fileno);
-   buf1 (comms);
-   buf2 (access);
-   buf4 (min);
-   buf4 (max);
-   buf4 (value);
-   buf1 (limited);
-   return df_txrx (d, 0xCC, n, buf, sizeof (buf), 0, NULL, 0);
-}
-
-const char *
 df_write_data (df_t * d, unsigned char fileno, unsigned char comms, unsigned int offset, unsigned int len, unsigned char *data)
 {
    unsigned int max = 26;       // Send in blocks
@@ -818,10 +776,41 @@ df_get_file_ids (df_t * d, unsigned long long *ids)
 }
 
 const char *
-df_get_file_settings (df_t * d, unsigned char fileno, unsigned char *type, unsigned char *comms, unsigned short *access,
+df_create_file (df_t * d, unsigned char fileno, char type, unsigned char comms, unsigned short access, unsigned int size,
+                unsigned int min, unsigned int max, unsigned int value, unsigned int recs, unsigned char lc)
+{                               // Create file
+   unsigned char buf[32],
+     n = 0;
+   buf1 (fileno);
+   buf1 (comms);
+   buf2 (access);
+   if (type == 'V')
+   {                            // Value file
+      buf4 (min);
+      buf4 (max);
+      buf4 (value);
+      buf1 (lc);
+      return df_txrx (d, 0xCC, n, buf, sizeof (buf), 0, NULL, 0);
+   }
+   if (type == 'C' || type == 'L')
+   {                            // Cyclic or linear
+      buf3 (size);
+      buf3 (max);
+      return df_txrx (d, type == 'C' ? 0xC0 : 0xC1, n, buf, sizeof (buf), 0, NULL, 0);
+   }
+   if (type == 'D' || type == 'B')
+   {                            // Data or backup
+      buf3 (size);
+      return df_txrx (d, type == 'D' ? 0xCD : 0xCB, n, buf, sizeof (buf), 0, NULL, 0);
+   }
+   return "Unknown file type";
+}
+
+const char *
+df_get_file_settings (df_t * d, unsigned char fileno, char *type, unsigned char *comms, unsigned short *access,
                       unsigned int *size, unsigned int *min, unsigned int *max, unsigned int *limited, unsigned int *recs,
                       unsigned char *lc)
-{
+{                               // Get file settings
    if (type)
       *type = 0;
    if (comms)
@@ -849,7 +838,7 @@ df_get_file_settings (df_t * d, unsigned char fileno, unsigned char *type, unsig
       return e;
    if (rlen < 7 || rlen > 17)
       return "Bad file setting length";
-   const char typecode[] = { 0xCD, 0xCB, 0xCC, 0xC1, 0xC0 };
+   const char typecode[] = "DBVLC";
    if (type && buf[1] < sizeof (typecode))
       *type = typecode[buf[1]];
    if (comms)

@@ -102,14 +102,12 @@ const char *df_get_uid (df_t * d, unsigned char uid[7]);
 
 // Create files
 const char *df_get_file_ids (df_t * d, unsigned long long *ids);        // File IDs 0-63 as bits
-const char * df_get_file_settings (df_t * d, unsigned char fileno,unsigned char *type, unsigned char *comms,unsigned short*access,unsigned int *size,unsigned int *min,unsigned int *max,unsigned int *limited,unsigned int *recs,unsigned char *lc);
-const char *df_delete_file (df_t * d, unsigned char fileno, unsigned char comms);
-const char *df_create_stddatafile (df_t * d, unsigned char fileno, unsigned char comms, unsigned short access, unsigned int len);
-const char *df_create_cyclicrecordfile (df_t * d, unsigned char fileno, unsigned char comms, unsigned short access,
-                                        unsigned int rsize, unsigned int maxrecs);
-const char *df_create_valuefile (df_t * d, unsigned char fileno, unsigned char comms, unsigned short access, unsigned int min,
-                                 unsigned int max, unsigned int value, unsigned char limited);
 
+// File types are character D=Data, B=Backup, V=Value, C=Cyclic, L=Linear
+const char * df_get_file_settings (df_t * d, unsigned char fileno,char *type, unsigned char *comms,unsigned short*access,unsigned int *size,unsigned int *min,unsigned int *max,unsigned int *limited,unsigned int *recs,unsigned char *lc);
+const char * df_create_file (df_t * d, unsigned char fileno,char type, unsigned char comms,unsigned short access,unsigned int size,unsigned int min,unsigned int max,unsigned int limited,unsigned int recs,unsigned char lc);
+
+const char *df_delete_file (df_t * d, unsigned char fileno, unsigned char comms);
 
 // Access files
 const char *df_write_data (df_t * d, unsigned char fileno, unsigned char comms, unsigned int offset, unsigned int len,
