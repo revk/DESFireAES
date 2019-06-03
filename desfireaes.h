@@ -44,13 +44,13 @@ struct df_s
 
 // Definitions
 // Comms mode and flags for use in tx/rx functions
-#define	DF_MODE_TX_CMAC		0x01    // Add CMAC on Tx
-#define	DF_MODE_TX_ENC		0x02    // Encrypted Tx
+#define	DF_MODE_RX_CMAC		0x01    // Check CMAC, not used as checked if authenticated but allows <<2 on comms mode
+#define	DF_MODE_RX_ENC		0x02    // Encrypted Rx, and check CRC if expected len set
 #define	DF_MODE_MASK		0x03    // Mask for comms mode
 #define	DF_MODE_SHIFT		2       // mode for rx
-#define	DF_MODE_RX_CMAC		0x01    // Check CMAC, not used as checked if authenticated but allows <<2 on comms mode
-#define	DF_MODE_RX_ENC		0x08    // Encrypted Rx, and check CRC if expected len set
-#define	DF_MODE_TX_CRC		0x10    // Add CRC (if encrypting Tx)
+#define	DF_MODE_TX_CMAC		0x04    // Add CMAC on Tx
+#define	DF_MODE_TX_ENC		0x08    // Encrypted Tx
+#define	DF_MODE_TX_NO_CRC	0x10    // Don't add CRC (if encrypting Tx)
 #define	DF_IGNORE_AF		0x40    // Don't concatenate AF responses
 #define	DF_IGNORE_STATUS	0x80    // Don't check status response
 
@@ -109,6 +109,9 @@ const char *df_get_uid (df_t * d, unsigned char uid[7]);
 // Create files
 const char *df_get_file_ids (df_t * d, unsigned long long *ids);        // File IDs 0-63 as bits
 
+// Change existing file settings
+const char * df_change_file_settings (df_t * d, unsigned char fileno, unsigned char comms, unsigned short oldaccess, unsigned short access);
+
 // File types are character D=Data, B=Backup, V=Value, C=Cyclic, L=Linear
 const char *df_get_file_settings (df_t * d, unsigned char fileno, char *type, unsigned char *comms,
                                   unsigned short *access, unsigned int *size, unsigned int *min, unsigned int *max,
@@ -117,6 +120,7 @@ const char *df_create_file (df_t * d, unsigned char fileno, char type, unsigned 
                             unsigned int size, unsigned int min, unsigned int max, unsigned int recs,
                             unsigned int value, unsigned char lc);
 
+// Delete a file
 const char *df_delete_file (df_t * d, unsigned char fileno);
 
 // Access files
