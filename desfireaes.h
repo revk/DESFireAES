@@ -17,23 +17,22 @@
 
 // Types
 
-// This function is used to send and receive to card
-// For send, len is size of message inc cmd byte. The data starts with cmd byte. Return value is -ve for error
-// For recv, len is space available. The data is filled starting with status byte. Return value is len inc status
-// recv returns len 0 for card disconnect
-// recv returns message with status byte FF followed by UID for card connect
-typedef int df_card_func_t (void *obj, unsigned int len, unsigned char *data);
+// The data exchange function talks to the card
+// Sends data, len bytes, starting from cmd byte.
+// Receives in to data, max bytes, from status byte.
+// Does not do any special handling of AF, etc.
+// Returns length received
+// Returns 0 for card gone
+// Returns -ve for any other error
+typedef int df_dx_func_t (void *obj, unsigned int len, unsigned char *data,unsigned int max);
 
 typedef struct df_s df_t;
 struct df_s
 {
    void *obj;                   // Opaque, passed to df_card_func
-   df_card_func_t *tx,
-    *rx;                        // Card data transfer functions
+   df_dx_func_t *dx;		// Card data exchange function
    EVP_CIPHER_CTX *ctx;
-   unsigned char uidlen;        // Current UID len
-   unsigned char uid[10];       // Current UID
-   const EVP_CIPHER *cipher;    // Current cipher
+   const EVP_CIPHER *cipher;    // Current cipher DES or AES (DES used for formatting to AES)
    unsigned char keylen;        // Current key length (0 if not logged in)
    unsigned char keyno;         // Current auth key no
    unsigned char sk0[16];       // Session key
@@ -79,10 +78,7 @@ const char *df_txrx (df_t * d, unsigned char cmd, unsigned int len, unsigned cha
 // Main application functions
 
 // Initialise
-const char *df_init (df_t *, void *obj, df_card_func_t * tx, df_card_func_t * rx);
-
-// Wait for connect (returns NULL on connect)
-const char *df_wait (df_t *);
+const char *df_init (df_t *, void *obj, df_dx_func_t * dx);
 
 // Get free mem
 const char *df_free_memory (df_t * d, unsigned int *mem);

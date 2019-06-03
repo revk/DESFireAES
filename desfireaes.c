@@ -13,7 +13,7 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/   
+*/
 
 #include <string.h>
 #include <stdio.h>
@@ -43,6 +43,16 @@ dump (const char *prefix, unsigned int len, unsigned char *data)
 #else
 #define dump(p,l,d)
 #endif
+
+// Simplify buffer loading
+#define wbuf1(v) buf[++n]=(v)
+#define wbuf2(v) buf[++n]=(v);buf[++n]=(v)>>8
+#define wbuf3(v) buf[++n]=(v);buf[++n]=(v)>>8;buf[++n]=(v)>>16
+#define wbuf4(v) buf[++n]=(v);buf[++n]=(v)>>8;buf[++n]=(v)>>16;buf[++n]=(v)>>24
+#define buf2(n) buf[(n)]+(buf[(n)+1]<<8)
+#define buf3(n) buf[(n)]+(buf[(n)+1]<<8)+(buf[(n)+2]<<16)
+#define buf4(n) buf[(n)]+(buf[(n)+1]<<8)+(buf[(n)+2]<<16)+(buf[(n)+3]<<24)
+
 
 unsigned int
 df_hex (unsigned int max, unsigned char *dst, const char *src)
@@ -132,15 +142,20 @@ add_crc (unsigned int len, unsigned char *src, unsigned char *dst)
 }
 
 const char *
-df_tx (df_t * d, unsigned char cmd, unsigned int len, unsigned char *data, unsigned char mode)
-{                               // Send data, len is *after* cmd byte from data+1
-   // Must have space for padding or CMAC
+df_txrx (df_t * d, unsigned char cmd, unsigned int len, unsigned char *buf, unsigned int max, int elen,
+         unsigned int *rlen, unsigned char mode)
+{                               // Data exchange
+   if (rlen)
+      *rlen = 0;
    unsigned char tmp[17];
-   if (!data && !len)
-      data = tmp;
-   if (!d || !data)
-      return "Bad tx call";
-   data[0] = cmd;
+   if (!buf && !len)
+   {
+      buf = tmp;
+      max = sizeof (tmp);
+   }
+   if (!d || !buf)
+      return "Bad dx call";
+   buf[0] = cmd;
    len++;
    if (mode & (DF_TX_ENC | DF_MODE_ENC))
    {                            // Encrypt
@@ -150,68 +165,42 @@ df_tx (df_t * d, unsigned char cmd, unsigned int len, unsigned char *data, unsig
       int n;
       if (mode & DF_ADD_CRC)
       {                         // Add CRC
-         add_crc (len, data, data + len);
+         add_crc (len, buf, buf + len);
          len += 4;
       }
       // Padding
       while ((len - offset) % d->keylen)
-         data[len++] = 0;
-      dump ("Pre enc", len, data);
+         buf[len++] = 0;
+      dump ("Pre enc", len, buf);
       EVP_EncryptInit_ex (d->ctx, d->cipher, NULL, d->sk0, d->cmac);
       EVP_CIPHER_CTX_set_padding (d->ctx, 0);
-      EVP_EncryptUpdate (d->ctx, data + offset, &n, data + offset, len - offset);
-      EVP_EncryptFinal (d->ctx, data + offset + n, &n);
-      memcpy (d->cmac, data + len - d->keylen, d->keylen);
+      EVP_EncryptUpdate (d->ctx, buf + offset, &n, buf + offset, len - offset);
+      EVP_EncryptFinal (d->ctx, buf + offset + n, &n);
+      memcpy (d->cmac, buf + len - d->keylen, d->keylen);
    } else
    {
       if (d->keylen)
       {
-         cmac (d, len, data);
+         cmac (d, len, buf);
          if (mode & DF_MODE_CMAC)
          {                      // Append CMAC
-            memcpy (data + len, d->cmac, 8);
+            memcpy (buf + len, d->cmac, 8);
             len += 8;
          }
       }
    }
-   int l = d->tx (d->obj, len, data);
-   if (l < 0)
-      return "Tx fail";
-   return NULL;
-}
-
-static void
-new_card (df_t * d, unsigned char uidlen, unsigned char *uid)
-{                               // New card
-   d->keylen = 0;
-   memset (d->aid, 0, sizeof (d->aid));
-   if (uidlen > sizeof (d->uid))
-      uidlen = sizeof (d->uid);
-   if (uidlen)
-      memcpy (d->uid, uid, uidlen);
-   d->uidlen = uidlen;
-}
-
-const char *
-df_rx (df_t * d, unsigned int max, unsigned char *data, int elen, unsigned int *rlen, unsigned char mode)
-{                               // Rx data, set rlen to data after status at data+1, elen is expected len (-1 for don't check)
-   if (rlen)
-      *rlen = 0;
-   unsigned char tmp[17];
-   if (!data && elen <= 0)
-   {
-      data = tmp;
-      max = sizeof (tmp);
-   }
-   if (!d || !data)
-      return "Bad rx call";
-   unsigned char *p = data,
-      *e = data + max;
+   unsigned char *p = buf,
+      *e = buf + max;
    while (1)
    {
       if (e == p)
          return "No space";
-      int b = d->rx (d->obj, e - p, p);
+      if (p > buf)
+      { // More data
+         *p = 0xAF;
+         len = 1;
+      }
+      int b = d->dx (d->obj, len, p, e - p);
       if (b < 0)
          return "Rx fail";
       if (!b)
@@ -220,65 +209,59 @@ df_rx (df_t * d, unsigned int max, unsigned char *data, int elen, unsigned int *
          return "";             // Card gone is blank error
       }
       b--;                      // skip status
-      if (*p == 0xFF)
-      {                         // New card
-         new_card (d, b, p + 1);
-         return "Unexpected new card";
-      }
-      if (p > data)
+      if (p > buf)
       {
-         *data = *p;
+         *buf = *p;
          if (b)
             memmove (p, p + 1, b);
       } else
          p++;                   // status byte
       p += b;
-      if ((mode & DF_IGNORE_AF) || *data != 0xAF)
+      if ((mode & DF_IGNORE_AF) || *buf != 0xAF)
          break;
-      d->tx (d->obj, 1, data);
    }
-   int l = p - data - 1;
-   if (!(mode & DF_IGNORE_STATUS) && *data && *data != 0xAF)
+   int l = p - buf - 1;
+   if (!(mode & DF_IGNORE_STATUS) && *buf && *buf != 0xAF)
    {
-      if (*data == 0x0C)
+      if (*buf == 0x0C)
          return "No change";
-      if (*data == 0x0E)
+      if (*buf == 0x0E)
          return "Out of EEPROM";
-      if (*data == 0x1C)
+      if (*buf == 0x1C)
          return "Illegal command";
-      if (*data == 0x1E)
+      if (*buf == 0x1E)
          return "Integrity error";
-      if (*data == 0x40)
+      if (*buf == 0x40)
          return "No such file";
-      if (*data == 0x7E)
+      if (*buf == 0x7E)
          return "Length error";
-      if (*data == 0x97)
+      if (*buf == 0x97)
          return "Crypto error";
-      if (*data == 0x9D)
+      if (*buf == 0x9D)
          return "Permission denied";
-      if (*data == 0x9E)
+      if (*buf == 0x9E)
          return "Parameter error";
-      if (*data == 0xA0)
+      if (*buf == 0xA0)
          return "Application not found";
-      if (*data == 0xAE)
+      if (*buf == 0xAE)
          return "Authentication error";
-      if (*data == 0xBE)
+      if (*buf == 0xBE)
          return "Boundary error";
-      if (*data == 0xC1)
+      if (*buf == 0xC1)
          return "Card integrity error";
-      if (*data == 0xCA)
+      if (*buf == 0xCA)
          return "Command aborted";
-      if (*data == 0xCD)
+      if (*buf == 0xCD)
          return "Card disabled";
-      if (*data == 0xCE)
+      if (*buf == 0xCE)
          return "Count error";
-      if (*data == 0xDE)
+      if (*buf == 0xDE)
          return "Duplicate error";
-      if (*data == 0xEE)
+      if (*buf == 0xEE)
          return "EEPROM error";
-      if (*data == 0xF0)
+      if (*buf == 0xF0)
          return "File not found";
-      if (*data == 0xF1)
+      if (*buf == 0xF1)
          return "File integrity found";
       return "Rx status error response";
    }
@@ -288,20 +271,20 @@ df_rx (df_t * d, unsigned int max, unsigned char *data, int elen, unsigned int *
       {                         // More than just status...
          int n;
          unsigned char cmac[16];
-         memcpy (cmac, data + 1 + l - d->keylen, d->keylen);
+         memcpy (cmac, buf + 1 + l - d->keylen, d->keylen);
          EVP_DecryptInit_ex (d->ctx, d->cipher, NULL, d->sk0, d->cmac);
          EVP_CIPHER_CTX_set_padding (d->ctx, 0);
-         EVP_DecryptUpdate (d->ctx, data + 1, &n, data + 1, l);
-         EVP_DecryptFinal (d->ctx, data + n, &n);
+         EVP_DecryptUpdate (d->ctx, buf + 1, &n, buf + 1, l);
+         EVP_DecryptFinal (d->ctx, buf + n, &n);
          memcpy (d->cmac, cmac, d->keylen);
-         dump ("Dec", l + 1, data);
+         dump ("Dec", l + 1, buf);
          if (elen >= 0)
          {
             if (l != ((elen + 4) | 15) + 1)
                return "Rx encrypted wrong length";
-            unsigned int c = data[1 + elen] + (data[2 + elen] << 8) + (data[3 + elen] << 16) + (data[4 + elen] << 24);
-            data[1 + elen] = data[0];   // Status at end of playload
-            if (c != crc (elen + 1, data + 1))
+            unsigned int c = buf4(1 + elen);
+            buf[1 + elen] = buf[0];   // Status at end of playload
+            if (c != crc (elen + 1, buf + 1))
                return "Rx CRC fail";
          }
       }
@@ -313,11 +296,11 @@ df_rx (df_t * d, unsigned int max, unsigned char *data, int elen, unsigned int *
          return "Rx no space for CMAC";
       l -= 8;
       // cmac is of status at END of payload
-      unsigned char c1 = data[l + 1];
-      data[l + 1] = *data;      // append status
-      cmac (d, l + 1, data + 1);
-      data[l + 1] = c1;         // put back for comparison
-      if (memcmp (d->cmac, data + l + 1, 8))
+      unsigned char c1 = buf[l + 1];
+      buf[l + 1] = *buf;      // append status
+      cmac (d, l + 1, buf + 1);
+      buf[l + 1] = c1;         // put back for comparison
+      if (memcmp (d->cmac, buf + l + 1, 8))
          return "Rx bad CMAC";
    } else
    {                            // Simple response
@@ -329,52 +312,16 @@ df_rx (df_t * d, unsigned int max, unsigned char *data, int elen, unsigned int *
    return NULL;
 }
 
-const char *
-df_txrx (df_t * d, unsigned char cmd, unsigned int len, unsigned char *data, unsigned int max, int elen,
-         unsigned int *rlen, unsigned char mode)
-{                               // Send and receive message, check response
-   const char *e;
-   if ((e = df_tx (d, cmd, len, data, mode)))
-      return e;
-   if ((e = df_rx (d, max, data, elen, rlen, mode)))
-      return e;
-   return NULL;
-}
-
-// Simplify buffer loading
-#define buf1(v) buf[++n]=(v)
-#define buf2(v) buf[++n]=(v);buf[++n]=(v)>>8
-#define buf3(v) buf[++n]=(v);buf[++n]=(v)>>8;buf[++n]=(v)>>16
-#define buf4(v) buf[++n]=(v);buf[++n]=(v)>>8;buf[++n]=(v)>>16;buf[++n]=(v)>>24
-
 
 const char *
-df_init (df_t * d, void *obj, df_card_func_t * tx, df_card_func_t * rx)
+df_init (df_t * d, void *obj, df_dx_func_t * dx)
 {                               // Initialise
    memset (d, 0, sizeof (*d));
    d->obj = obj;
-   d->tx = tx;
-   d->rx = rx;
+   d->dx = dx;
    if (!(d->ctx = EVP_CIPHER_CTX_new ()))
       return "Unable to make CTX";
    return NULL;
-}
-
-const char *
-df_wait (df_t * d)
-{                               // Wait for connect
-   unsigned char buf[17];
-   int l;
-   while (1)
-   {
-      l = d->rx (d->obj, sizeof (buf), buf);
-      if (l < 0)
-         return "Rx fail";
-      if (!l || *buf != 0xFF)
-         continue;              // Disconnect or other response
-      new_card (d, l - 1, buf + 1);
-      return NULL;              // Done
-   }
 }
 
 const char *
@@ -409,7 +356,7 @@ df_get_key_settings (df_t * d, unsigned char keyno, unsigned char *setting, unsi
 {
    unsigned char buf[17],
      n = 0;
-   buf1 (keyno);
+   wbuf1 (keyno);
    const char *e = df_txrx (d, 0x45, n, buf, sizeof (buf), 2, NULL, 0);
    if (e)
       return e;
@@ -425,7 +372,7 @@ df_get_key_version (df_t * d, unsigned char keyno, unsigned char *version)
 {
    unsigned char buf[17],
      n = 0;
-   buf1 (keyno);
+   wbuf1 (keyno);
    const char *e = df_txrx (d, 0x64, n, buf, sizeof (buf), 1, NULL, 0);
    if (e)
       return e;
@@ -448,7 +395,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    const char *e;
    unsigned char buf[64];
    int n = 0;
-   buf1 (keyno);
+   wbuf1 (keyno);
    if ((e = df_txrx (d, keylen == 8 ? 0x1A : 0xAA, n, buf, sizeof (buf), keylen, NULL, DF_IGNORE_AF)))
       return e;
    {                            // Create our random A value
@@ -572,7 +519,7 @@ df_change_key_settings (df_t * d, unsigned char settings)
       return "Not authenticated";
    unsigned char buf[32],
      n = 0;
-   buf1 (settings);
+   wbuf1 (settings);
    return df_txrx (d, 0x54, n, buf, sizeof (buf), 0, NULL, DF_TX_ENC);
 }
 
@@ -583,8 +530,8 @@ df_set_configuration (df_t * d, unsigned char settings)
       return "Not authenticated";
    unsigned char buf[32],
      n = 0;
-   buf1 (0);
-   buf1 (settings);
+   wbuf1 (0);
+   wbuf1 (settings);
    return df_txrx (d, 0x54, 2, buf, sizeof (buf), 0, NULL, DF_TX_ENC);
 }
 
@@ -719,9 +666,9 @@ df_write_data (df_t * d, unsigned char fileno, unsigned char comms, unsigned int
          l = max;
       unsigned char buf[max + 32],
         n = 0;
-      buf1 (fileno);
-      buf3 (offset);
-      buf3 (l);
+      wbuf1 (fileno);
+      wbuf3 (offset);
+      wbuf3 (l);
       memcpy (buf + n + 1, data, l);
       n += l;
       if ((e = df_txrx (d, 0x3D, n, buf, max + 32, 0, NULL, comms & DF_MODE_MASK)))
@@ -750,8 +697,6 @@ df_get_uid (df_t * d, unsigned char uid[7])
    const char *e = df_txrx (d, 0x51, 0, buf, sizeof (buf), 7, NULL, DF_RX_ENC);
    if (e)
       return e;
-   d->uidlen = 7;
-   memcpy (d->uid, buf + 1, 7);
    if (uid)
       memcpy (uid, buf + 1, 7);
    return NULL;
@@ -766,7 +711,7 @@ df_free_memory (df_t * d, unsigned int *mem)
    if (e)
       return e;
    if (mem)
-      *mem = buf[1] + (buf[2] << 8) + (buf[3] << 16);
+      *mem = buf3(1);
    return NULL;
 }
 
@@ -794,26 +739,26 @@ df_create_file (df_t * d, unsigned char fileno, char type, unsigned char comms, 
 {                               // Create file
    unsigned char buf[32],
      n = 0;
-   buf1 (fileno);
-   buf1 (comms);
-   buf2 (access);
+   wbuf1 (fileno);
+   wbuf1 (comms);
+   wbuf2 (access);
    if (type == 'V')
    {                            // Value file
-      buf4 (min);
-      buf4 (max);
-      buf4 (value);
-      buf1 (lc);
+      wbuf4 (min);
+      wbuf4 (max);
+      wbuf4 (value);
+      wbuf1 (lc);
       return df_txrx (d, 0xCC, n, buf, sizeof (buf), 0, NULL, 0);
    }
    if (type == 'C' || type == 'L')
    {                            // Cyclic or linear
-      buf3 (size);
-      buf3 (max);
+      wbuf3 (size);
+      wbuf3 (max);
       return df_txrx (d, type == 'C' ? 0xC0 : 0xC1, n, buf, sizeof (buf), 0, NULL, 0);
    }
    if (type == 'D' || type == 'B')
    {                            // Data or backup
-      buf3 (size);
+      wbuf3 (size);
       return df_txrx (d, type == 'D' ? 0xCD : 0xCB, n, buf, sizeof (buf), 0, NULL, 0);
    }
    return "Unknown file type";
@@ -845,7 +790,7 @@ df_get_file_settings (df_t * d, unsigned char fileno, char *type, unsigned char 
    unsigned int rlen;
    unsigned char buf[128],
      n = 0;
-   buf1 (fileno);
+   wbuf1 (fileno);
    const char *e = df_txrx (d, 0xF5, n, buf, sizeof (buf), -1, &rlen, 0);
    if (e)
       return e;
@@ -857,19 +802,19 @@ df_get_file_settings (df_t * d, unsigned char fileno, char *type, unsigned char 
    if (comms)
       *comms = buf[2];
    if (access)
-      *access = buf[3] + (buf[4] << 8);
+      *access = buf2(3);
    if (size && buf[1] != 2)
-      *size = buf[5] + (buf[6] << 8) + (buf[7] << 16);
+      *size = buf3(5);
    if (min && buf[1] == 2)
-      *min = buf[5] + (buf[6] << 8) + (buf[7] << 16) + (buf[8] << 24);
+      *min = buf4(5);
    if (max && buf[1] == 2)
-      *max = buf[9] + (buf[10] << 8) + (buf[11] << 16) + (buf[12] << 24);
+      *max = buf4(9);
    if (max && buf[1] >= 3)
-      *max = buf[8] + (buf[9] << 8) + (buf[10] << 16);
+      *max =buf3(8);
    if (recs && buf[1] >= 3)
-      *recs = buf[11] + (buf[12] << 8) + (buf[13] << 16);
+      *recs = buf3(11);
    if (limited && buf[1] == 2)
-      *limited = buf[13] + (buf[14] << 8) + (buf[15] << 16) + (buf[16] << 24);
+      *limited = buf4(13);
    if (lc)
       *lc = buf[17];
    return NULL;
@@ -880,9 +825,9 @@ df_read_data (df_t * d, unsigned char fileno, unsigned int offset, unsigned int 
 {
    unsigned char buf[len + 32],
      n = 0;
-   buf1 (fileno);
-   buf3 (offset);
-   buf3 (len);
+   wbuf1 (fileno);
+   wbuf3 (offset);
+   wbuf3 (len);
    const char *e = df_txrx (d, 0xBD, n, buf, sizeof (buf), len, NULL, 0);
    if (e)
       return e;
@@ -896,9 +841,9 @@ df_read_records (df_t * d, unsigned char fileno, unsigned int record, unsigned i
 {
    unsigned char buf[recs * rsize + 32],
      n = 0;
-   buf1 (fileno);
-   buf3 (record);
-   buf3 (recs);
+   wbuf1 (fileno);
+   wbuf3 (record);
+   wbuf3 (recs);
    const char *e = df_txrx (d, 0xBB, n, buf, sizeof (buf), recs * rsize, NULL, 0);
    if (e)
       return e;
@@ -912,11 +857,11 @@ df_get_value (df_t * d, unsigned char fileno, unsigned int *value)
 {
    unsigned char buf[32],
      n = 0;
-   buf1 (fileno);
+   wbuf1 (fileno);
    const char *e = df_txrx (d, 0x6C, n, buf, sizeof (buf), 4, NULL, 0);
    if (e)
       return e;
    if (value)
-      *value = buf[1] + (buf[2] << 8) + (buf[3] << 16) + (buf[4] << 24);
+      *value = buf4(1);
    return NULL;
 }
