@@ -44,14 +44,15 @@ struct df_s
 
 // Definitions
 // Comms mode and flags for use in tx/rx functions
-#define	DF_MODE_CMAC		0x01	// Add CMAC (checking is done if authenticated anyway and not encrypted)
-#define	DF_MODE_ENC		0x02	// Encrypted tx and rx
-#define DF_MODE_MASK		0x03	// File modes
-#define	DF_IGNORE_STATUS	0x80	// Don't check status response
+#define	DF_MODE_TX_CMAC		0x01	// Add CMAC on Tx
+#define	DF_MODE_TX_ENC		0x02	// Encrypted Tx
+#define	DF_MODE_MASK		0x03	// Mask for comms mode
+#define	DF_MODE_SHIFT		2	// mode for rx
+#define	DF_MODE_RX_CMAC		0x01	// Check CMAC, not used as checked if authenticated but allows <<2 on comms mode
+#define	DF_MODE_RX_ENC		0x08	// Encrypted Rx, and check CRC if expected len set
+#define	DF_MODE_TX_CRC		0x10	// Add CRC (if encrypting Tx)
 #define	DF_IGNORE_AF		0x40	// Don't concatenate AF responses
-#define DF_ADD_CRC		0x20	// Add CRC on Tx (if encrypting)
-#define	DF_TX_ENC		0x10	// Encrypted Tx
-#define	DF_RX_ENC		0x08	// Encrypted Rx
+#define	DF_IGNORE_STATUS	0x80	// Don't check status response
 
 #define DF_SET_MASTER_CHANGE	0x01	// App and master settings
 #define DF_SET_LIST		0x02
@@ -112,20 +113,21 @@ const char *df_get_file_ids (df_t * d, unsigned long long *ids);	// File IDs 0-6
 // File types are character D=Data, B=Backup, V=Value, C=Cyclic, L=Linear
 const char *df_get_file_settings (df_t * d, unsigned char fileno, char *type, unsigned char *comms,
 				  unsigned short *access, unsigned int *size, unsigned int *min, unsigned int *max,
-				  unsigned int *limited, unsigned int *recs, unsigned char *lc);
+				  unsigned int *recs, unsigned int *limited, unsigned char *lc);
 const char *df_create_file (df_t * d, unsigned char fileno, char type, unsigned char comms, unsigned short access,
-			    unsigned int size, unsigned int min, unsigned int max, unsigned int limited,
-			    unsigned int recs, unsigned char lc);
+			    unsigned int size, unsigned int min, unsigned int max, unsigned int recs,
+			    unsigned int value, unsigned char lc);
 
-const char *df_delete_file (df_t * d, unsigned char fileno, unsigned char comms);
+const char *df_delete_file (df_t * d, unsigned char fileno);
 
 // Access files
-const char *df_write_data (df_t * d, unsigned char fileno, char type, unsigned char comms, unsigned int offset,
-			   unsigned int len, const void *data);
-const char *df_read_data (df_t * d, unsigned char fileno, unsigned int offset, unsigned int len, unsigned char *data);
-const char *df_read_records (df_t * d, unsigned char fileno, unsigned int record, unsigned int recs, unsigned int rsize,
-			     unsigned char *data);
-const char *df_get_value (df_t * d, unsigned char fileno, unsigned int *value);
+const char *df_write_data (df_t * d, unsigned char fileno, unsigned char comms, char type,
+			   unsigned int offset, unsigned int len, const void *data);
+const char *df_read_data (df_t * d, unsigned char fileno, unsigned char comms, unsigned int offset, unsigned int len,
+			  unsigned char *data);
+const char *df_read_records (df_t * d, unsigned char fileno, unsigned char comms, unsigned int record,
+			     unsigned int recs, unsigned int rsize, unsigned char *data);
+const char *df_get_value (df_t * d, unsigned char fileno, unsigned char comms, unsigned int *value);
 
 // Commit
 const char *df_commit (df_t *);

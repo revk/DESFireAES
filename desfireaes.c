@@ -158,13 +158,13 @@ df_dx (df_t * d, unsigned char cmd, unsigned int len, unsigned char *buf, unsign
     return "Bad dx call";
   buf[0] = cmd;
   len++;
-  if (mode & (DF_TX_ENC | DF_MODE_ENC))
+  if (mode & DF_MODE_TX_ENC)
     {				// Encrypt
       if (!d->keylen)
 	return "Not authenticated";
       unsigned int offset = (cmd == 0x54 ? 1 : 2);
       int n;
-      if (mode & DF_ADD_CRC)
+      if (mode & DF_MODE_TX_CRC)
 	{			// Add CRC
 	  add_crc (len, buf, buf + len);
 	  len += 4;
@@ -184,7 +184,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int len, unsigned char *buf, unsign
       if (d->keylen)
 	{
 	  cmac (d, len, buf);
-	  if (mode & DF_MODE_CMAC)
+	  if (mode & DF_MODE_TX_CMAC)
 	    {			// Append CMAC
 	      memcpy (buf + len, d->cmac, 8);
 	      len += 8;
@@ -267,7 +267,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int len, unsigned char *buf, unsign
 	return "File integrity found";
       return "Rx status error response";
     }
-  if (mode & (DF_RX_ENC | DF_MODE_ENC))
+  if (mode & DF_MODE_RX_ENC)
     {				// Decrypt
       if (l > 0)
 	{			// More than just status...
@@ -525,7 +525,7 @@ df_change_key_settings (df_t * d, unsigned char settings)
     return "Not authenticated";
   unsigned char buf[32], n = 0;
   wbuf1 (settings);
-  return df_dx (d, 0x54, n, buf, sizeof (buf), 0, NULL, DF_TX_ENC | DF_ADD_CRC);
+  return df_dx (d, 0x54, n, buf, sizeof (buf), 0, NULL, DF_MODE_TX_ENC | DF_MODE_TX_CRC);
 }
 
 const char *
@@ -536,7 +536,7 @@ df_set_configuration (df_t * d, unsigned char settings)
   unsigned char buf[32], n = 0;
   wbuf1 (0);
   wbuf1 (settings);
-  return df_dx (d, 0x5C, 2, buf, sizeof (buf), 0, NULL, DF_TX_ENC | DF_ADD_CRC);
+  return df_dx (d, 0x5C, 2, buf, sizeof (buf), 0, NULL, DF_MODE_TX_ENC | DF_MODE_TX_CRC);
 }
 
 const char *
@@ -565,7 +565,7 @@ df_change_key (df_t * d, unsigned char keyno, unsigned char version, unsigned ch
     }
   else
     n = 22;
-  if ((e = df_dx (d, buf[0], n, buf, sizeof (buf), 0, NULL, DF_TX_ENC)))
+  if ((e = df_dx (d, buf[0], n, buf, sizeof (buf), 0, NULL, DF_MODE_TX_ENC)))	// CRC already sorted above
     return e;
   if (keyno == d->keyno)
     d->keylen = 0;		// No longer secure;
@@ -663,7 +663,7 @@ df_create_application (df_t * d, unsigned char aid[3], unsigned char settings, u
 }
 
 const char *
-df_write_data (df_t * d, unsigned char fileno, char type, unsigned char comms, unsigned int offset, unsigned int len,
+df_write_data (df_t * d, unsigned char fileno, unsigned char comms, char type, unsigned int offset, unsigned int len,
 	       const void *data)
 {
   if (type != 'D' && type != 'B' && type != 'L' && type != 'C')
@@ -691,11 +691,11 @@ df_write_data (df_t * d, unsigned char fileno, char type, unsigned char comms, u
 }
 
 const char *
-df_delete_file (df_t * d, unsigned char fileno, unsigned char comms)
+df_delete_file (df_t * d, unsigned char fileno)
 {
   unsigned char buf[32];
   buf[1] = fileno;
-  return df_dx (d, 0xDF, 1, buf, sizeof (buf), 0, NULL, comms & DF_MODE_MASK);
+  return df_dx (d, 0xDF, 1, buf, sizeof (buf), 0, NULL, 0);
 }
 
 const char *
@@ -704,7 +704,7 @@ df_get_uid (df_t * d, unsigned char uid[7])
   if (!d->keylen)
     return "Not authenticated";
   unsigned char buf[64];
-  const char *e = df_dx (d, 0x51, 0, buf, sizeof (buf), 7, NULL, DF_RX_ENC);
+  const char *e = df_dx (d, 0x51, 0, buf, sizeof (buf), 7, NULL, DF_MODE_RX_ENC);
   if (e)
     return e;
   if (uid)
@@ -745,7 +745,7 @@ df_get_file_ids (df_t * d, unsigned long long *ids)
 
 const char *
 df_create_file (df_t * d, unsigned char fileno, char type, unsigned char comms, unsigned short access,
-		unsigned int size, unsigned int min, unsigned int max, unsigned int value, unsigned int recs,
+		unsigned int size, unsigned int min, unsigned int max, unsigned int recs, unsigned int value,
 		unsigned char lc)
 {				// Create file
   unsigned char buf[32], n = 0;
@@ -776,8 +776,8 @@ df_create_file (df_t * d, unsigned char fileno, char type, unsigned char comms, 
 
 const char *
 df_get_file_settings (df_t * d, unsigned char fileno, char *type, unsigned char *comms, unsigned short *access,
-		      unsigned int *size, unsigned int *min, unsigned int *max, unsigned int *limited,
-		      unsigned int *recs, unsigned char *lc)
+		      unsigned int *size, unsigned int *min, unsigned int *max, unsigned int *recs,
+		      unsigned int *limited, unsigned char *lc)
 {				// Get file settings
   if (type)
     *type = 0;
@@ -830,13 +830,14 @@ df_get_file_settings (df_t * d, unsigned char fileno, char *type, unsigned char 
 }
 
 const char *
-df_read_data (df_t * d, unsigned char fileno, unsigned int offset, unsigned int len, unsigned char *data)
+df_read_data (df_t * d, unsigned char fileno, unsigned char comms, unsigned int offset, unsigned int len,
+	      unsigned char *data)
 {
   unsigned char buf[len + 32], n = 0;
   wbuf1 (fileno);
   wbuf3 (offset);
   wbuf3 (len);
-  const char *e = df_dx (d, 0xBD, n, buf, sizeof (buf), len, NULL, 0);
+  const char *e = df_dx (d, 0xBD, n, buf, sizeof (buf), len, NULL, comms & DF_MODE_MASK);
   if (e)
     return e;
   if (data)
@@ -845,14 +846,14 @@ df_read_data (df_t * d, unsigned char fileno, unsigned int offset, unsigned int 
 }
 
 const char *
-df_read_records (df_t * d, unsigned char fileno, unsigned int record, unsigned int recs, unsigned int rsize,
-		 unsigned char *data)
+df_read_records (df_t * d, unsigned char fileno, unsigned char comms, unsigned int record, unsigned int recs,
+		 unsigned int rsize, unsigned char *data)
 {
   unsigned char buf[recs * rsize + 32], n = 0;
   wbuf1 (fileno);
   wbuf3 (record);
   wbuf3 (recs);
-  const char *e = df_dx (d, 0xBB, n, buf, sizeof (buf), recs * rsize, NULL, 0);
+  const char *e = df_dx (d, 0xBB, n, buf, sizeof (buf), recs * rsize, NULL, (comms & DF_MODE_MASK) << DF_MODE_SHIFT);
   if (e)
     return e;
   if (data)
@@ -861,11 +862,11 @@ df_read_records (df_t * d, unsigned char fileno, unsigned int record, unsigned i
 }
 
 const char *
-df_get_value (df_t * d, unsigned char fileno, unsigned int *value)
+df_get_value (df_t * d, unsigned char fileno, unsigned char comms, unsigned int *value)
 {
   unsigned char buf[32], n = 0;
   wbuf1 (fileno);
-  const char *e = df_dx (d, 0x6C, n, buf, sizeof (buf), 4, NULL, 0);
+  const char *e = df_dx (d, 0x6C, n, buf, sizeof (buf), 4, NULL, (comms & DF_MODE_MASK) << DF_MODE_SHIFT);
   if (e)
     return e;
   if (value)
