@@ -42,17 +42,9 @@ struct df_s
    unsigned char aid[3];        // Current selected AID
 };
 
-// Definitions
-// Comms mode and flags for use in tx/rx functions
-#define	DF_MODE_RX_CMAC		0x01    // Check CMAC, not used as checked if authenticated but allows <<2 on comms mode
-#define	DF_MODE_RX_ENC		0x02    // Encrypted Rx, and check CRC if expected len set
-#define	DF_MODE_MASK		0x03    // Mask for comms mode
-#define	DF_MODE_SHIFT		2       // mode for rx
-#define	DF_MODE_TX_CMAC		0x04    // Add CMAC on Tx
-#define	DF_MODE_TX_ENC		0x08    // Encrypted Tx
-#define	DF_MODE_TX_NO_CRC	0x10    // Don't add CRC (if encrypting Tx)
-#define	DF_IGNORE_AF		0x40    // Don't concatenate AF responses
-#define	DF_IGNORE_STATUS	0x80    // Don't check status response
+// Some useful definitions
+#define	DF_MODE_CMAC		0x01    // Check CMAC, not used as checked if authenticated but allows <<2 on comms mode
+#define	DF_MODE_ENC		0x02    // Encrypted Rx, and check CRC if expected len set
 
 #define DF_SET_MASTER_CHANGE	0x01    // App and master settings
 #define DF_SET_LIST		0x02
@@ -61,7 +53,8 @@ struct df_s
 #define	DF_SET_DEFAULT		0x0F
 
 // Functions
-// const char * response is NULL for good, else simple error string. An empty error string means card gone.
+// All of these functions that return a const char * return NULL for "OK" or an error message
+// An empty string error message is returned for "card gone"
 
 // Low level data exchange functions
 
@@ -71,9 +64,46 @@ unsigned int df_hex (unsigned int max, unsigned char *dst, const char *src);
 // Initialise
 const char *df_init (df_t *, void *obj, df_dx_func_t * dx);
 
-// Low level data exchange, handles AF (unlexx flagged not to)
-const char *df_dx (df_t * d, unsigned char cmd, unsigned int len, unsigned char *data, unsigned int max, int elen,
-                   unsigned int *rlen, unsigned char mode);
+// Low level data exchange
+// Data exchange, sends a command and receives a response
+// Note that data[] is used for command and response, and is max bytes long - allow at least 19 spare bytes at end for CRC and padding
+// Command:
+//  The command is in data, starting with command byte in data[0], and is txlen bytes long
+//  Note that cmd arg is for convenience and if non 0 is simply stored in data[0]
+//  If the command is long, it is split and sent using AF process
+//  If not authenticated the command is sent, plain
+//  If authenticated and txenc set, then it is sent encrypted
+//   - A CRC is added to the end (at txlen), adding 4 bytes
+//   - The command is padded as needed (up to 16 byte blocks)
+//   - The command is encrypted from byte txenc (i.e. txenc bytes at the start, including the cmd byte, are not encrypted)
+//   - The encryption updates the AES A IV used for CMAC checking
+//  If authenticated, and txenc is 0, then the command is sent plain
+//   - The command is CMAC processed to update the AES A IV for checking
+// Response:
+//  If response has AF status, multiple response payloads are concatenated with final status at start.
+//  If not authenticated and rxenc is set, this is the number of bytes expected, else error
+//   - The return value is the length of response including status byte at data[0]
+//  If authenticated, and rxenc is non zero, then this is expected to be an encrypted message
+//   - The length has to be a multiple of 16 bytes (after status byte)
+//   - The payload is decrypted (i.e. all data after status byte)
+//   - A CRC is expected at byte rxenc, this is checked as well and length checked
+//   - The AES A IV is updated for CMAC checking as part of decrypting
+//   - The return value is rxenc, i.e. rxenc includes status byte in count
+//  If authenticated and rxenc is 0 then an 8 byte CMAC is expected
+//   - The 8 bytes are removed, after checking there are 8 bytes
+//   - The CMAC process is done on response (payload+status) and checked
+//   - The return value is the length without the 8 byte CMAC
+//  If case of any error the return value is -ve
+//  If rlen is NULL, the response is expected to just be a status byte, and error if not
+// Special cases
+//  Receive concatenation is not done for cmd AA, 1A or 0A. The AF response is treated as good.
+//  Send with txenc and cmd C4 does not add the CRC. ChangeKey has an extra CRC and padding you need to do first.
+//  If we receive a clean message, checked for CRC or CMAC, etc, but with bad status then rlen is set, otherwise 0
+//  - I.e. this allows you to decide if you want to ignore an error. Note an error makes us unauthenticated
+// Examples
+//  Cmd 54 with txenc 1, rxenc 0, and len 2, adds CRC and encrypts from byte 1, returns rlen 1 (status byte)
+//  Cmd 51 with txenc 0, rxenc 8, and len 1, sends 51, receives 17 bytes, decrypts and checks CRC at byte 8, returns rlen 8 (status + 7 byte UID)
+const char* df_dx(df_t*d,unsigned char cmd,unsigned int max,unsigned char*data,unsigned int txlen,unsigned char txenc,unsigned char rxenc,unsigned int *rlen);
 
 // Main application functions
 
