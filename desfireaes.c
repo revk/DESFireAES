@@ -828,7 +828,7 @@ df_get_file_settings (df_t * d, unsigned char fileno, char *type, unsigned char 
   unsigned int rlen;
   unsigned char buf[128], n = 0;
   wbuf1 (fileno);
-  const char *e = df_dx (d, 0xF5, sizeof (buf), buf, 1, 0, 0, &rlen);
+  const char *e = df_dx (d, 0xF5, sizeof (buf), buf, 2, 0, 0, &rlen);
   if (e)
     return e;
   if (rlen < 8 || rlen > 18)
