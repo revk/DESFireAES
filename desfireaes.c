@@ -881,7 +881,7 @@ df_read_records (df_t * d, unsigned char fileno, unsigned char comms, unsigned i
 		 unsigned int recs, unsigned int rsize, unsigned char *data)
 {
   unsigned int rlen;
-  unsigned char buf[recs * rsize + 32], n = 0;
+  unsigned char buf[recs * rsize + 32], n = 1;
   wbuf1 (fileno);
   wbuf3 (record);
   wbuf3 (recs);
@@ -899,7 +899,7 @@ const char *
 df_get_value (df_t * d, unsigned char fileno, unsigned char comms, unsigned int *value)
 {
   unsigned int rlen;
-  unsigned char buf[32], n = 0;
+  unsigned char buf[32], n = 1;
   wbuf1 (fileno);
   const char *e = df_dx (d, 0x6C, sizeof (buf), buf, n, 0, (comms & DF_MODE_ENC) ? 4 : 0, &rlen);
   if (e)
