@@ -28,7 +28,7 @@
 
 #include "desfireaes.h"
 
-#define DEBUG
+//#define DEBUG
 
 #ifdef DEBUG
 static void
@@ -46,9 +46,9 @@ dump (const char *prefix, unsigned int len, unsigned char *data)
 
 // Simplify buffer loading
 #define wbuf1(v) buf[n++]=(v)
-#define wbuf2(v) buf[n++]=(v);buf[++n]=(v)>>8
-#define wbuf3(v) buf[n++]=(v);buf[++n]=(v)>>8;buf[++n]=(v)>>16
-#define wbuf4(v) buf[n++]=(v);buf[++n]=(v)>>8;buf[++n]=(v)>>16;buf[++n]=(v)>>24
+#define wbuf2(v) buf[n++]=(v);buf[n++]=(v)>>8
+#define wbuf3(v) buf[n++]=(v);buf[n++]=(v)>>8;buf[n++]=(v)>>16
+#define wbuf4(v) buf[n++]=(v);buf[n++]=(v)>>8;buf[n++]=(v)>>16;buf[n++]=(v)>>24
 #define buf2(n) buf[(n)]+(buf[(n)+1]<<8)
 #define buf3(n) buf[(n)]+(buf[(n)+1]<<8)+(buf[(n)+2]<<16)
 #define buf4(n) buf[(n)]+(buf[(n)+1]<<8)+(buf[(n)+2]<<16)+(buf[(n)+3]<<24)
@@ -260,7 +260,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
 	  if (c != crc (rxenc, buf + 1))
 	    return "Rx CRC fail";
 	}
-      else
+      else if(len>1)
 	{			// Check CMAC
 	  if (len < 9)
 	    return "Bad rx CMAC len";
@@ -597,11 +597,11 @@ df_change_key (df_t * d, unsigned char keyno, unsigned char version, unsigned ch
       for (n = 0; n < 16; n++)
 	buf[2 + n] ^= old[n];
       add_crc (16, key, buf + 23);
-      n = 26;
+      n = 27;
     }
   else
-    n = 22;
-  if ((e = df_dx (d, buf[0], sizeof (buf), buf, n, 0, 0, NULL)))
+    n = 23;
+  if ((e = df_dx (d, buf[0], sizeof (buf), buf, n, 2, 0, NULL)))
     return e;
   if (keyno == d->keyno)
     d->keylen = 0;		// No longer secure;
