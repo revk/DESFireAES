@@ -224,7 +224,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
          *e = buf + max;
       while (p < e)
       {
-         dump ("Tx(raw)", e - p, p);
+         dump ("Tx(raw)", len, p);
          int b = d->dx (d->obj, len, p, e - p);
          if (b < 0)
             return "Dx fail";
