@@ -143,7 +143,7 @@ add_crc (unsigned int len, unsigned char *src, unsigned char *dst)
    dst[3] = c >> 24;
 }
 
-#define TXMAX 64
+#define TXMAX 55
 const char *
 df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsigned int len, unsigned char txenc,
        unsigned char rxenc, unsigned int *rlen)
