@@ -541,8 +541,41 @@ df_des_authenticate (df_t * d, unsigned char keyno, unsigned char key[8])
       return e;
    memcpy (d->sk0 + 0, d->sk1 + 0, 4);
    memcpy (d->sk0 + 4, d->sk2 + 0, 4);
+   // Make SK1
+   memset (d->cmac, 0, 8);
+   memset (d->sk1, 0, 8);
+   if (EVP_EncryptInit_ex (d->ctx, EVP_des_cbc (), NULL, d->sk0, d->cmac) != 1)
+      return "Encrypt error";
+   EVP_CIPHER_CTX_set_padding (d->ctx, 0);
+   int n;
+   if (EVP_EncryptUpdate (d->ctx, d->sk1, &n, d->sk1, 8) != 1)
+      return "Encrypt error";
+   if (EVP_EncryptFinal (d->ctx, d->sk1 + n, &n) != 1)
+      return "Encrypt error";
+   // Shift SK1
+   unsigned char xor = 0;
+   if (d->sk1[0] & 0x80)
+      xor = 0x1B;
+   for (n = 0; n < 8 - 1; n++)
+      d->sk1[n] = (d->sk1[n] << 1) | (d->sk1[n + 1] >> 7);
+   d->sk1[8 - 1] <<= 1;
+   d->sk1[8 - 1] ^= xor;
+   // Make SK2
+   memcpy (d->sk2, d->sk1, 8);
+   // Shift SK2
+   xor = 0;
+   if (d->sk2[0] & 0x80)
+      xor = 0x1B;
+   for (n = 0; n < 8 - 1; n++)
+      d->sk2[n] = (d->sk2[n] << 1) | (d->sk2[n + 1] >> 7);
+   d->sk2[8 - 1] <<= 1;
+   d->sk2[8 - 1] ^= xor;
+   // Reset CMAC
+   memset (d->cmac, 0, 8);
+   dump ("SK0", 8, d->sk0);
+   dump ("SK1", 8, d->sk1);
+   dump ("SK2", 8, d->sk2);
    memset (d->cmac, 0, sizeof (d->cmac));
-   // we don't need to make SK1/2 really do we?
    return NULL;
 }
 
