@@ -635,7 +635,6 @@ df_format (df_t * d, unsigned char key[16])
    {                            // DES!
       if ((e = df_des_authenticate (d, 0, key)))
          return e;
-      d->keylen = 0;            // We don't CMAC DES, so don't check response CMAC, assume it worked
       if ((e = df_dx (d, 0xFC, 0, NULL, 1, 0, 0, NULL)))
          return e;
       // Auth again as we did not track CMAC so cannot do key change without
