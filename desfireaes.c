@@ -28,7 +28,7 @@
 
 #include "desfireaes.h"
 
-#define DEBUG
+//#define DEBUG
 
 #ifdef DEBUG
 static void
