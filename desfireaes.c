@@ -482,101 +482,59 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    d->keylen = keylen;
    dump ("A", d->keylen, d->sk1);
    dump ("B", d->keylen, d->sk2);
+   memcpy (d->sk0 + 0, d->sk1 + 0, 4);
+   memcpy (d->sk0 + 4, d->sk2 + 0, 4);
+   if(d->keylen>8)
+   {
+   memcpy (d->sk0 + 8, d->sk1 + 12, 4);
+   memcpy (d->sk0 + 12, d->sk2 + 12, 4);
+   }
+   // Make SK1
+   memset (d->cmac, 0, keylen);
+   memset (d->sk1, 0, keylen);
+   if (EVP_EncryptInit_ex (d->ctx, cipher, NULL, d->sk0, d->cmac) != 1)
+      return "Encrypt error";
+   EVP_CIPHER_CTX_set_padding (d->ctx, 0);
+   if (EVP_EncryptUpdate (d->ctx, d->sk1, &n, d->sk1, keylen) != 1)
+      return "Encrypt error";
+   if (EVP_EncryptFinal (d->ctx, d->sk1 + n, &n) != 1)
+      return "Encrypt error";
+   // Shift SK1
+   unsigned char xor = 0;
+   if (d->sk1[0] & 0x80)
+      xor = (keylen==8?0x1B:0x87);
+   for (n = 0; n < keylen - 1; n++)
+      d->sk1[n] = (d->sk1[n] << 1) | (d->sk1[n + 1] >> 7);
+   d->sk1[keylen - 1] <<= 1;
+   d->sk1[keylen - 1] ^= xor;
+   // Make SK2
+   memcpy (d->sk2, d->sk1, keylen);
+   // Shift SK2
+   xor = 0;
+   if (d->sk2[0] & 0x80)
+      xor = (keylen==8?0x1B:0x87);
+   for (n = 0; n < keylen - 1; n++)
+      d->sk2[n] = (d->sk2[n] << 1) | (d->sk2[n + 1] >> 7);
+   d->sk2[keylen - 1] <<= 1;
+   d->sk2[keylen - 1] ^= xor;
+   // Reset CMAC
+   memset (d->cmac, 0, keylen);
+   dump ("SK0", keylen, d->sk0);
+   dump ("SK1", keylen, d->sk1);
+   dump ("SK2", keylen, d->sk2);
    return NULL;
 }
 
 const char *
 df_authenticate (df_t * d, unsigned char keyno, unsigned char key[16])
 {                               // Authenticate with a key (AES)
-   int n;
-   const char *e;
-   if ((e = df_authenticate_general (d, keyno, 16, key, EVP_aes_128_cbc ())))
-      return e;
-   // Make session key (sk1 and sk2 will be left with A and B values)
-   memcpy (d->sk0 + 0, d->sk1 + 0, 4);
-   memcpy (d->sk0 + 4, d->sk2 + 0, 4);
-   memcpy (d->sk0 + 8, d->sk1 + 12, 4);
-   memcpy (d->sk0 + 12, d->sk2 + 12, 4);
-   // Make SK1
-   memset (d->cmac, 0, 16);
-   memset (d->sk1, 0, 16);
-   if (EVP_EncryptInit_ex (d->ctx, EVP_aes_128_cbc (), NULL, d->sk0, d->cmac) != 1)
-      return "Encrypt error";
-   EVP_CIPHER_CTX_set_padding (d->ctx, 0);
-   if (EVP_EncryptUpdate (d->ctx, d->sk1, &n, d->sk1, 16) != 1)
-      return "Encrypt error";
-   if (EVP_EncryptFinal (d->ctx, d->sk1 + n, &n) != 1)
-      return "Encrypt error";
-   // Shift SK1
-   unsigned char xor = 0;
-   if (d->sk1[0] & 0x80)
-      xor = 0x87;
-   for (n = 0; n < 16 - 1; n++)
-      d->sk1[n] = (d->sk1[n] << 1) | (d->sk1[n + 1] >> 7);
-   d->sk1[16 - 1] <<= 1;
-   d->sk1[16 - 1] ^= xor;
-   // Make SK2
-   memcpy (d->sk2, d->sk1, 16);
-   // Shift SK2
-   xor = 0;
-   if (d->sk2[0] & 0x80)
-      xor = 0x87;
-   for (n = 0; n < 16 - 1; n++)
-      d->sk2[n] = (d->sk2[n] << 1) | (d->sk2[n + 1] >> 7);
-   d->sk2[16 - 1] <<= 1;
-   d->sk2[16 - 1] ^= xor;
-   // Reset CMAC
-   memset (d->cmac, 0, 16);
-   dump ("SK0", 16, d->sk0);
-   dump ("SK1", 16, d->sk1);
-   dump ("SK2", 16, d->sk2);
-   return NULL;                 // All ready
+   return df_authenticate_general (d, keyno, 16, key, EVP_aes_128_cbc ());
 }
 
 const char *
 df_des_authenticate (df_t * d, unsigned char keyno, unsigned char key[8])
-{
-   const char *e;
-   if ((e = df_authenticate_general (d, keyno, 8, key, EVP_des_cbc ())))
-      return e;
-   memcpy (d->sk0 + 0, d->sk1 + 0, 4);
-   memcpy (d->sk0 + 4, d->sk2 + 0, 4);
-   // Make SK1
-   memset (d->cmac, 0, 8);
-   memset (d->sk1, 0, 8);
-   if (EVP_EncryptInit_ex (d->ctx, EVP_des_cbc (), NULL, d->sk0, d->cmac) != 1)
-      return "Encrypt error";
-   EVP_CIPHER_CTX_set_padding (d->ctx, 0);
-   int n;
-   if (EVP_EncryptUpdate (d->ctx, d->sk1, &n, d->sk1, 8) != 1)
-      return "Encrypt error";
-   if (EVP_EncryptFinal (d->ctx, d->sk1 + n, &n) != 1)
-      return "Encrypt error";
-   // Shift SK1
-   unsigned char xor = 0;
-   if (d->sk1[0] & 0x80)
-      xor = 0x1B;
-   for (n = 0; n < 8 - 1; n++)
-      d->sk1[n] = (d->sk1[n] << 1) | (d->sk1[n + 1] >> 7);
-   d->sk1[8 - 1] <<= 1;
-   d->sk1[8 - 1] ^= xor;
-   // Make SK2
-   memcpy (d->sk2, d->sk1, 8);
-   // Shift SK2
-   xor = 0;
-   if (d->sk2[0] & 0x80)
-      xor = 0x1B;
-   for (n = 0; n < 8 - 1; n++)
-      d->sk2[n] = (d->sk2[n] << 1) | (d->sk2[n + 1] >> 7);
-   d->sk2[8 - 1] <<= 1;
-   d->sk2[8 - 1] ^= xor;
-   // Reset CMAC
-   memset (d->cmac, 0, 8);
-   dump ("SK0", 8, d->sk0);
-   dump ("SK1", 8, d->sk1);
-   dump ("SK2", 8, d->sk2);
-   memset (d->cmac, 0, sizeof (d->cmac));
-   return NULL;
+{ // Authenticate with DES - used to convert card to AES
+   return df_authenticate_general (d, keyno, 8, key, EVP_des_cbc ());
 }
 
 const char *
