@@ -367,10 +367,10 @@ df_get_version (df_t * d, unsigned char ver[28])
    const char *e = df_dx (d, 0x60, sizeof (buf), buf, 1, 0, 0, &rlen);
    if (e)
       return e;
-   if (rlen != 28)
+   if (rlen != 29)
       return "Bad length for Get Version";
    if (ver)
-      memcpy (ver, buf + 1, rlen);
+      memcpy (ver, buf + 1, rlen - 1);
    return NULL;
 }
 
@@ -484,10 +484,10 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    dump ("B", d->keylen, d->sk2);
    memcpy (d->sk0 + 0, d->sk1 + 0, 4);
    memcpy (d->sk0 + 4, d->sk2 + 0, 4);
-   if(d->keylen>8)
+   if (d->keylen > 8)
    {
-   memcpy (d->sk0 + 8, d->sk1 + 12, 4);
-   memcpy (d->sk0 + 12, d->sk2 + 12, 4);
+      memcpy (d->sk0 + 8, d->sk1 + 12, 4);
+      memcpy (d->sk0 + 12, d->sk2 + 12, 4);
    }
    // Make SK1
    memset (d->cmac, 0, keylen);
@@ -502,7 +502,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    // Shift SK1
    unsigned char xor = 0;
    if (d->sk1[0] & 0x80)
-      xor = (keylen==8?0x1B:0x87);
+      xor = (keylen == 8 ? 0x1B : 0x87);
    for (n = 0; n < keylen - 1; n++)
       d->sk1[n] = (d->sk1[n] << 1) | (d->sk1[n + 1] >> 7);
    d->sk1[keylen - 1] <<= 1;
@@ -512,7 +512,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    // Shift SK2
    xor = 0;
    if (d->sk2[0] & 0x80)
-      xor = (keylen==8?0x1B:0x87);
+      xor = (keylen == 8 ? 0x1B : 0x87);
    for (n = 0; n < keylen - 1; n++)
       d->sk2[n] = (d->sk2[n] << 1) | (d->sk2[n + 1] >> 7);
    d->sk2[keylen - 1] <<= 1;
@@ -533,7 +533,7 @@ df_authenticate (df_t * d, unsigned char keyno, unsigned char key[16])
 
 const char *
 df_des_authenticate (df_t * d, unsigned char keyno, unsigned char key[8])
-{ // Authenticate with DES - used to convert card to AES
+{                               // Authenticate with DES - used to convert card to AES
    return df_authenticate_general (d, keyno, 8, key, EVP_des_cbc ());
 }
 
