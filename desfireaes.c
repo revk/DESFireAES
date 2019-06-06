@@ -745,7 +745,7 @@ df_free_memory (df_t * d, unsigned int *mem)
    const char *e = df_dx (d, 0x6E, sizeof (buf), buf, 1, 0, 0, &rlen);
    if (e)
       return e;
-   if (rlen != 3)
+   if (rlen != 4)
       return "Bad response size for free memory";
    if (mem)
       *mem = buf3 (1);
