@@ -60,9 +60,9 @@ df_hex (unsigned int max, unsigned char *dst, const char *src)
    unsigned int p = 0;
    while (p < max)
    {
-      while (*src && !isxdigit (*src))
-         src++;
-      if (!*src)
+      while (*src && !isalpha (*src))
+         src++;                 // Skip separators
+      if (!*src || !isxdigit (*src))
          return p;
       int v = (*src & 15) + (isalpha (*src) ? 9 : 0);
       src++;
