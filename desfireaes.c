@@ -60,7 +60,7 @@ df_hex (unsigned int max, unsigned char *dst, const char *src)
    unsigned int p = 0;
    while (p < max)
    {
-      while (*src && !isalpha (*src))
+      while (*src && !isalnum (*src))
          src++;                 // Skip separators
       if (!*src || !isxdigit (*src))
          return p;
