@@ -710,7 +710,7 @@ df_write_data (df_t * d, unsigned char fileno, char type, unsigned char comms, u
    wbuf3 (len);
    memcpy (buf + n, data, len);
    n += len;
-   return df_dx (d, type == 'D' ? 0x3D : 0x3B, sizeof (buf), buf, n, (comms & DF_MODE_ENC) ? 8 : 0, 0, NULL);
+   return df_dx (d, type == 'D' || type == 'B' ? 0x3D : 0x3B, sizeof (buf), buf, n, (comms & DF_MODE_ENC) ? 8 : 0, 0, NULL);
 }
 
 const char *
