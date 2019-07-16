@@ -166,7 +166,14 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
       d->keylen = 0;
    if (d->keylen)
    {                            // Authenticated
-      if (txenc)
+      if (txenc == 0xFF)
+      {                         // Append CMAC
+         if (len + 8 > max)
+            return "Tx no space";
+         cmac (d, len, buf);    // CMAC update
+         memcpy (buf + len, d->cmac, 8);
+         len += 8;
+      } else if (txenc)
       {                         // Encrypt
          if (((len + 4) | 15) + 1 > max)
             return "Tx no space";
@@ -710,7 +717,9 @@ df_write_data (df_t * d, unsigned char fileno, char type, unsigned char comms, u
    wbuf3 (len);
    memcpy (buf + n, data, len);
    n += len;
-   return df_dx (d, type == 'D' || type == 'B' ? 0x3D : 0x3B, sizeof (buf), buf, n, (comms & DF_MODE_ENC) ? 8 : 0, 0, NULL);
+   return df_dx (d, type == 'D'
+                 || type == 'B' ? 0x3D : 0x3B, sizeof (buf), buf, n, (comms & DF_MODE_ENC) ? 8 : (comms & DF_MODE_CMAC) ? 0xFF : 0,
+                 0, NULL);
 }
 
 const char *
