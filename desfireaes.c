@@ -378,8 +378,8 @@ const char *
 df_get_key_settings (df_t * d, unsigned char keyno, unsigned char *setting, unsigned char *keynos)
 {
    unsigned int rlen;
-   unsigned char buf[17],
-     n = 1;
+   unsigned char buf[17];
+   unsigned int n = 1;
    wbuf1 (keyno);
    const char *e = df_dx (d, 0x45, sizeof (buf), buf, n, 0, 0, &rlen);
    if (e)
@@ -397,8 +397,8 @@ const char *
 df_get_key_version (df_t * d, unsigned char keyno, unsigned char *version)
 {
    unsigned int rlen;
-   unsigned char buf[17],
-     n = 1;
+   unsigned char buf[17];
+   unsigned int n = 1;
    wbuf1 (keyno);
    const char *e = df_dx (d, 0x64, sizeof (buf), buf, n, 0, 0, &rlen);
    if (e)
@@ -424,7 +424,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    const char *e;
    unsigned int rlen;
    unsigned char buf[64];
-   int n = 1;
+   unsigned int n = 1;
    wbuf1 (keyno);
    if ((e = df_dx (d, keylen == 8 ? 0x1A : 0xAA, sizeof (buf), buf, n, 0, 0, &rlen)))
       return e;
@@ -542,8 +542,8 @@ df_change_file_settings (df_t * d, unsigned char fileno, unsigned char comms, un
 {                               // Change settings for current key
    if (!d->keylen)
       return "Not authenticated";
-   unsigned char buf[32],
-     n = 1;
+   unsigned char buf[32];
+   unsigned int n = 1;
    wbuf1 (fileno);
    wbuf1 (comms);
    wbuf2 (access);
@@ -556,8 +556,8 @@ df_change_key_settings (df_t * d, unsigned char settings)
    if (!d->keylen)
       return "Not authenticated";
    unsigned int rlen;
-   unsigned char buf[32],
-     n = 1;
+   unsigned char buf[32];
+   unsigned int n = 1;
    wbuf1 (settings);
    return df_dx (d, 0x54, sizeof (buf), buf, n, 1, 0, NULL);
 }
@@ -568,8 +568,8 @@ df_set_configuration (df_t * d, unsigned char settings)
    if (!d->keylen)
       return "Not authenticated";
    unsigned int rlen;
-   unsigned char buf[32],
-     n = 1;
+   unsigned char buf[32];
+   unsigned int n = 1;
    wbuf1 (0);
    wbuf1 (settings);
    return df_dx (d, 0x5C, sizeof (buf), buf, n, 2, 0, NULL);
@@ -703,8 +703,8 @@ df_write_data (df_t * d, unsigned char fileno, char type, unsigned char comms, u
 {
    if (type != 'D' && type != 'B' && type != 'L' && type != 'C')
       return "Bad file type";
-   unsigned char buf[len + 32],
-     n = 1;
+   unsigned char buf[len + 32];
+   unsigned int n = 1;
    wbuf1 (fileno);
    wbuf3 (offset);
    wbuf3 (len);
@@ -716,8 +716,8 @@ df_write_data (df_t * d, unsigned char fileno, char type, unsigned char comms, u
 const char *
 df_delete_file (df_t * d, unsigned char fileno)
 {
-   unsigned char buf[32],
-     n = 1;
+   unsigned char buf[32];
+   unsigned int n = 1;
    wbuf1 (fileno);
    return df_dx (d, 0xDF, sizeof (buf), buf, n, 0, 0, NULL);
 }
@@ -775,8 +775,8 @@ const char *
 df_create_file (df_t * d, unsigned char fileno, char type, unsigned char comms, unsigned short access,
                 unsigned int size, unsigned int min, unsigned int max, unsigned int recs, unsigned int value, unsigned char lc)
 {                               // Create file
-   unsigned char buf[32],
-     n = 1;
+   unsigned char buf[32];
+   unsigned int n = 1;
    wbuf1 (fileno);
    wbuf1 (comms);
    wbuf2 (access);
@@ -826,8 +826,8 @@ df_get_file_settings (df_t * d, unsigned char fileno, char *type, unsigned char 
    if (lc)
       *lc = 0;
    unsigned int rlen;
-   unsigned char buf[128],
-     n = 1;
+   unsigned char buf[128];
+   unsigned int n = 1;
    wbuf1 (fileno);
    const char *e = df_dx (d, 0xF5, sizeof (buf), buf, n, 0, 0, &rlen);
    if (e)
@@ -862,8 +862,8 @@ const char *
 df_read_data (df_t * d, unsigned char fileno, unsigned char comms, unsigned int offset, unsigned int len, unsigned char *data)
 {
    unsigned int rlen;
-   unsigned char buf[len + 32],
-     n = 1;
+   unsigned char buf[len + 32];
+   unsigned int n = 1;
    wbuf1 (fileno);
    wbuf3 (offset);
    wbuf3 (len);
@@ -882,8 +882,8 @@ df_read_records (df_t * d, unsigned char fileno, unsigned char comms, unsigned i
                  unsigned int recs, unsigned int rsize, unsigned char *data)
 {
    unsigned int rlen;
-   unsigned char buf[recs * rsize + 32],
-     n = 1;
+   unsigned char buf[recs * rsize + 32];
+   unsigned int n = 1;
    wbuf1 (fileno);
    wbuf3 (record);
    wbuf3 (recs);
@@ -901,8 +901,8 @@ const char *
 df_get_value (df_t * d, unsigned char fileno, unsigned char comms, unsigned int *value)
 {
    unsigned int rlen;
-   unsigned char buf[32],
-     n = 1;
+   unsigned char buf[32];
+   unsigned int n = 1;
    wbuf1 (fileno);
    const char *e = df_dx (d, 0x6C, sizeof (buf), buf, n, 0, (comms & DF_MODE_ENC) ? 4 : 0, &rlen);
    if (e)
