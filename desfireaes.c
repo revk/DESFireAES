@@ -173,6 +173,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
          cmac (d, len, buf);    // CMAC update
          memcpy (buf + len, d->cmac, 8);
          len += 8;
+         dump ("Tx(cmac)", len, buf);
       } else if (txenc)
       {                         // Encrypt
          if (((len + 4) | 15) + 1 > max)
