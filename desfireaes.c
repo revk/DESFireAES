@@ -15,10 +15,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifdef	ESP__PLATFORM
+#ifdef	ESP_PLATFORM
 
 #else
-#include <string.h>
 #include <stdio.h>
 #include <err.h>
 #include <openssl/evp.h>
@@ -27,8 +26,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <ctype.h>
 #endif
+
+#include <string.h>
+#include <ctype.h>
 
 #include "desfireaes.h"
 
@@ -64,15 +65,15 @@ df_hex (unsigned int max, unsigned char *dst, const char *src)
    unsigned int p = 0;
    while (p < max)
    {
-      while (*src && !isalnum (*src))
+      while (*src && !isalnum ((int)(*src)))
          src++;                 // Skip separators
-      if (!*src || !isxdigit (*src))
+      if (!*src || !isxdigit ((int)(*src)))
          return p;
-      int v = (*src & 15) + (isalpha (*src) ? 9 : 0);
+      int v = (*src & 15) + (isalpha ((int)(*src)) ? 9 : 0);
       src++;
-      if (isxdigit (*src))
+      if (isxdigit ((int)(*src)))
       {
-         v = (v << 4) + (*src & 15) + (isalpha (*src) ? 9 : 0);
+         v = (v << 4) + (*src & 15) + (isalpha ((int)(*src)) ? 9 : 0);
          src++;
       }
       if (dst)
@@ -85,13 +86,13 @@ df_hex (unsigned int max, unsigned char *dst, const char *src)
 static void
 cmac (df_t * d, unsigned int len, unsigned char *data)
 {                               // Process CMAC
-   int n,
-     p = 0;
+     int p = 0;
    dump ("CMAC of", len, data);
    unsigned char temp[d->keylen];
 #ifdef	ESP_PLATFORM
 	// TODO
 #else
+   int n,
    EVP_EncryptInit_ex (d->ctx, d->cipher, NULL, d->sk0, d->cmac);
    EVP_CIPHER_CTX_set_padding (d->ctx, 0);
 #endif
@@ -468,6 +469,9 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
       return e;
    if (rlen != keylen + 1)
       return "Bad response length for auth";
+#ifdef	ESP_PLATFORM
+	// TODO
+#else
    {                            // Create our random A value
       int f = open ("/dev/urandom", O_RDONLY);
       if (f < 0)
@@ -476,6 +480,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
          err (1, "random");
       close (f);
    }
+#endif
    // Decode B value
    memset (d->cmac, 0, keylen);
 #ifdef	ESP_PLATFORM
@@ -528,8 +533,10 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    if (memcmp (buf + 1, d->sk1 + 1, keylen - 1) || buf[keylen] != d->sk1[0])
       return "Auth failed";
    // Mark as logged in
+#ifndef ESP_PLATFORM
    d->cipher = cipher;
    d->keylen = keylen;
+#endif
    dump ("A", d->keylen, d->sk1);
    dump ("B", d->keylen, d->sk2);
    memcpy (d->sk0 + 0, d->sk1 + 0, 4);
@@ -615,7 +622,6 @@ df_change_key_settings (df_t * d, unsigned char settings)
 {                               // Change settings for current key
    if (!d->keylen)
       return "Not authenticated";
-   unsigned int rlen;
    unsigned char buf[32];
    unsigned int n = 1;
    wbuf1 (settings);
@@ -627,7 +633,6 @@ df_set_configuration (df_t * d, unsigned char settings)
 {                               // Change settings for current key
    if (!d->keylen)
       return "Not authenticated";
-   unsigned int rlen;
    unsigned char buf[32];
    unsigned int n = 1;
    wbuf1 (0);
@@ -639,7 +644,6 @@ const char *
 df_change_key (df_t * d, unsigned char keyno, unsigned char version, unsigned char old[16], unsigned char key[16])
 {
    const char *e;
-   unsigned int rlen;
    unsigned char zero[16] = { 0 };
    if (!key)
       key = zero;
@@ -684,6 +688,9 @@ df_format (df_t * d, unsigned char key[16])
       return e;
    if (!version)
    {                            // DES!
+#ifdef	ESP_PLATFORM
+	return "Needs conversion from DES to AES";
+#else
       if ((e = df_des_authenticate (d, 0, key)))
          return e;
       if ((e = df_dx (d, 0xFC, 0, NULL, 1, 0, 0, NULL)))
@@ -693,6 +700,7 @@ df_format (df_t * d, unsigned char key[16])
          return e;
       if ((e = df_change_key (d, 0x80, 1, NULL, NULL)))
          return e;
+#endif
    } else
    {                            // AES
       if ((e = df_authenticate (d, 0, key)))
