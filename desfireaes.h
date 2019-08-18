@@ -31,8 +31,10 @@ struct df_s
 {
    void *obj;                   // Opaque, passed to df_card_func
    df_dx_func_t *dx;            // Card data exchange function
+#ifndef	ESP_PLATFORM
    EVP_CIPHER_CTX *ctx;
    const EVP_CIPHER *cipher;    // Current cipher DES or AES (DES used for formatting to AES)
+#endif
    unsigned char keylen;        // Current key length (0 if not logged in)
    unsigned char keyno;         // Current auth key no
    unsigned char sk0[16];       // Session key

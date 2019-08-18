@@ -15,6 +15,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef	ESP__PLATFORM
+
+#else
 #include <string.h>
 #include <stdio.h>
 #include <err.h>
@@ -25,6 +28,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <ctype.h>
+#endif
 
 #include "desfireaes.h"
 
@@ -85,12 +89,20 @@ cmac (df_t * d, unsigned int len, unsigned char *data)
      p = 0;
    dump ("CMAC of", len, data);
    unsigned char temp[d->keylen];
+#ifdef	ESP_PLATFORM
+	// TODO
+#else
    EVP_EncryptInit_ex (d->ctx, d->cipher, NULL, d->sk0, d->cmac);
    EVP_CIPHER_CTX_set_padding (d->ctx, 0);
+#endif
    while (p + d->keylen < len)
    {                            // Initial blocks
       dump ("Enc", d->keylen, data + p);
+#ifdef	ESP_PLATFORM
+	// TODO
+#else
       EVP_EncryptUpdate (d->ctx, temp, &n, data + p, d->keylen);
+#endif
       p += d->keylen;
    }
    // Final block
@@ -107,8 +119,12 @@ cmac (df_t * d, unsigned int len, unsigned char *data)
       for (p = 0; p < d->keylen; p++)
          temp[p] ^= d->sk1[p];
    dump ("Enc", d->keylen, temp);
+#ifdef	ESP_PLATFORM
+	// TODO
+#else
    EVP_EncryptUpdate (d->ctx, temp, &n, temp, d->keylen);
    EVP_EncryptFinal (d->ctx, temp + n, &n);
+#endif
    memcpy (d->cmac, temp, d->keylen);
    dump ("CMAC", d->keylen, d->cmac);
 }
@@ -187,11 +203,15 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
          while ((len - txenc) % d->keylen)
             buf[len++] = 0;
          dump ("Pre enc", len, buf);
+#ifdef	ESP_PLATFORM
+	// TODO
+#else
          EVP_EncryptInit_ex (d->ctx, d->cipher, NULL, d->sk0, d->cmac);
          EVP_CIPHER_CTX_set_padding (d->ctx, 0);
          int n;
          EVP_EncryptUpdate (d->ctx, buf + txenc, &n, buf + txenc, len - txenc);
          EVP_EncryptFinal (d->ctx, buf + txenc + n, &n);
+#endif
          memcpy (d->cmac, buf + len - d->keylen, d->keylen);
          dump ("Tx(enc)", len, buf);
       } else
@@ -264,12 +284,16 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
       {                         // Encrypted
          if (len != ((rxenc + 3) | 15) + 2)
             return "Rx Bad encrypted length";
+#ifdef	ESP_PLATFORM
+	// TODO
+#else
          EVP_DecryptInit_ex (d->ctx, d->cipher, NULL, d->sk0, d->cmac);
          EVP_CIPHER_CTX_set_padding (d->ctx, 0);
          memcpy (d->cmac, buf + len - d->keylen, d->keylen);
          int n;
          EVP_DecryptUpdate (d->ctx, buf + 1, &n, buf + 1, len - 1);
          EVP_DecryptFinal (d->ctx, buf + n, &n);
+#endif
          dump ("Dec", len, buf);
          unsigned int c = buf4 (rxenc);
          buf[rxenc] = buf[0];   // Status at end of playload
@@ -347,8 +371,10 @@ df_init (df_t * d, void *obj, df_dx_func_t * dx)
    memset (d, 0, sizeof (*d));
    d->obj = obj;
    d->dx = dx;
+#ifndef	ESP_PLATFORM
    if (!(d->ctx = EVP_CIPHER_CTX_new ()))
       return "Unable to make CTX";
+#endif
    return NULL;
 }
 
@@ -419,7 +445,11 @@ df_get_key_version (df_t * d, unsigned char keyno, unsigned char *version)
 }
 
 const char *
-df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, unsigned char *key, const EVP_CIPHER * cipher)
+df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, unsigned char *key
+#ifndef	ESP_PLATFORM
+ ,const EVP_CIPHER * cipher
+#endif
+)
 {                               // Authenticate for specified key len
    unsigned char zero[keylen];
    if (!key)
@@ -448,6 +478,9 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    }
    // Decode B value
    memset (d->cmac, 0, keylen);
+#ifdef	ESP_PLATFORM
+	// TODO
+#else
    if (EVP_DecryptInit_ex (d->ctx, cipher, NULL, key, d->cmac) != 1)
       return "Decrypt error";
    EVP_CIPHER_CTX_set_padding (d->ctx, 0);
@@ -455,12 +488,16 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
       return "Decrypt error";
    if (EVP_DecryptFinal_ex (d->ctx, d->sk2 + n, &n) != 1)
       return "Decrypt error";
+#endif
    memcpy (d->cmac, buf + 1, keylen);
    // Make response A+B'
    memcpy (buf + 1, d->sk1, keylen);
    memcpy (buf + keylen + 1, d->sk2 + 1, keylen - 1);
    buf[keylen * 2] = d->sk2[0];
    // Encrypt response
+#ifdef	ESP_PLATFORM
+	// TODO
+#else
    if (EVP_EncryptInit_ex (d->ctx, cipher, NULL, key, d->cmac) != 1)
       return "Encrypt error";
    EVP_CIPHER_CTX_set_padding (d->ctx, 0);
@@ -468,6 +505,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
       return "Encrypt error";
    if (EVP_EncryptFinal_ex (d->ctx, buf + 1 + n, &n) != 1)
       return "Encrypt error";
+#endif
    memcpy (d->cmac, buf + keylen + 1, keylen);
    // Send response
    if ((e = df_dx (d, 0xAF, sizeof (buf), buf, 1 + keylen * 2, 0, 0, &rlen)))
@@ -475,6 +513,9 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    if (rlen != keylen + 1)
       return "Bad response length for auth";
    // Decode reply A'
+#ifdef	ESP_PLATFORM
+	// TODO
+#else
    if (EVP_DecryptInit_ex (d->ctx, cipher, NULL, key, d->cmac) != 1)
       return "Decrypt error";
    EVP_CIPHER_CTX_set_padding (d->ctx, 0);
@@ -482,6 +523,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
       return "Decrypt error";
    if (EVP_DecryptFinal_ex (d->ctx, buf + 1 + n, &n) != 1)
       return "Decrypt error";
+#endif
    // Check A'
    if (memcmp (buf + 1, d->sk1 + 1, keylen - 1) || buf[keylen] != d->sk1[0])
       return "Auth failed";
@@ -500,6 +542,9 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    // Make SK1
    memset (d->cmac, 0, keylen);
    memset (d->sk1, 0, keylen);
+#ifdef	ESP_PLATFORM
+	// TODO
+#else
    if (EVP_EncryptInit_ex (d->ctx, cipher, NULL, d->sk0, d->cmac) != 1)
       return "Encrypt error";
    EVP_CIPHER_CTX_set_padding (d->ctx, 0);
@@ -507,6 +552,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
       return "Encrypt error";
    if (EVP_EncryptFinal (d->ctx, d->sk1 + n, &n) != 1)
       return "Encrypt error";
+#endif
    // Shift SK1
    unsigned char xor = 0;
    if (d->sk1[0] & 0x80)
@@ -536,14 +582,20 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
 const char *
 df_authenticate (df_t * d, unsigned char keyno, unsigned char key[16])
 {                               // Authenticate with a key (AES)
-   return df_authenticate_general (d, keyno, 16, key, EVP_aes_128_cbc ());
+   return df_authenticate_general (d, keyno, 16, key
+#ifndef	ESP_PLATFORM
+,EVP_aes_128_cbc ()
+#endif
+);
 }
 
+#ifndef	ESP_PLATFORM
 const char *
 df_des_authenticate (df_t * d, unsigned char keyno, unsigned char key[8])
 {                               // Authenticate with DES - used to convert card to AES
    return df_authenticate_general (d, keyno, 8, key, EVP_des_cbc ());
 }
+#endif
 
 const char *
 df_change_file_settings (df_t * d, unsigned char fileno, unsigned char comms, unsigned short oldaccess, unsigned short access)
