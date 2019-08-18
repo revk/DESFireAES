@@ -65,15 +65,15 @@ df_hex (unsigned int max, unsigned char *dst, const char *src)
    unsigned int p = 0;
    while (p < max)
    {
-      while (*src && !isalnum ((int)(*src)))
+      while (*src && !isalnum ((int) (*src)))
          src++;                 // Skip separators
-      if (!*src || !isxdigit ((int)(*src)))
+      if (!*src || !isxdigit ((int) (*src)))
          return p;
-      int v = (*src & 15) + (isalpha ((int)(*src)) ? 9 : 0);
+      int v = (*src & 15) + (isalpha ((int) (*src)) ? 9 : 0);
       src++;
-      if (isxdigit ((int)(*src)))
+      if (isxdigit ((int) (*src)))
       {
-         v = (v << 4) + (*src & 15) + (isalpha ((int)(*src)) ? 9 : 0);
+         v = (v << 4) + (*src & 15) + (isalpha ((int) (*src)) ? 9 : 0);
          src++;
       }
       if (dst)
@@ -86,11 +86,11 @@ df_hex (unsigned int max, unsigned char *dst, const char *src)
 static void
 cmac (df_t * d, unsigned int len, unsigned char *data)
 {                               // Process CMAC
-     int p = 0;
+   int p = 0;
    dump ("CMAC of", len, data);
    unsigned char temp[d->keylen];
 #ifdef	ESP_PLATFORM
-	// TODO
+   // TODO
 #else
    int n;
    EVP_EncryptInit_ex (d->ctx, d->cipher, NULL, d->sk0, d->cmac);
@@ -100,7 +100,7 @@ cmac (df_t * d, unsigned int len, unsigned char *data)
    {                            // Initial blocks
       dump ("Enc", d->keylen, data + p);
 #ifdef	ESP_PLATFORM
-	// TODO
+      // TODO
 #else
       EVP_EncryptUpdate (d->ctx, temp, &n, data + p, d->keylen);
 #endif
@@ -121,7 +121,7 @@ cmac (df_t * d, unsigned int len, unsigned char *data)
          temp[p] ^= d->sk1[p];
    dump ("Enc", d->keylen, temp);
 #ifdef	ESP_PLATFORM
-	// TODO
+   // TODO
 #else
    EVP_EncryptUpdate (d->ctx, temp, &n, temp, d->keylen);
    EVP_EncryptFinal (d->ctx, temp + n, &n);
@@ -205,7 +205,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
             buf[len++] = 0;
          dump ("Pre enc", len, buf);
 #ifdef	ESP_PLATFORM
-	// TODO
+         // TODO
 #else
          EVP_EncryptInit_ex (d->ctx, d->cipher, NULL, d->sk0, d->cmac);
          EVP_CIPHER_CTX_set_padding (d->ctx, 0);
@@ -286,7 +286,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
          if (len != ((rxenc + 3) | 15) + 2)
             return "Rx Bad encrypted length";
 #ifdef	ESP_PLATFORM
-	// TODO
+         // TODO
 #else
          EVP_DecryptInit_ex (d->ctx, d->cipher, NULL, d->sk0, d->cmac);
          EVP_CIPHER_CTX_set_padding (d->ctx, 0);
@@ -448,9 +448,9 @@ df_get_key_version (df_t * d, unsigned char keyno, unsigned char *version)
 const char *
 df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, unsigned char *key
 #ifndef	ESP_PLATFORM
- ,const EVP_CIPHER * cipher
+                         , const EVP_CIPHER * cipher
 #endif
-)
+   )
 {                               // Authenticate for specified key len
    unsigned char zero[keylen];
    if (!key)
@@ -470,7 +470,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    if (rlen != keylen + 1)
       return "Bad response length for auth";
 #ifdef	ESP_PLATFORM
-	// TODO
+   // TODO
 #else
    {                            // Create our random A value
       int f = open ("/dev/urandom", O_RDONLY);
@@ -484,7 +484,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    // Decode B value
    memset (d->cmac, 0, keylen);
 #ifdef	ESP_PLATFORM
-	// TODO
+   // TODO
 #else
    if (EVP_DecryptInit_ex (d->ctx, cipher, NULL, key, d->cmac) != 1)
       return "Decrypt error";
@@ -501,7 +501,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    buf[keylen * 2] = d->sk2[0];
    // Encrypt response
 #ifdef	ESP_PLATFORM
-	// TODO
+   // TODO
 #else
    if (EVP_EncryptInit_ex (d->ctx, cipher, NULL, key, d->cmac) != 1)
       return "Encrypt error";
@@ -519,7 +519,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
       return "Bad response length for auth";
    // Decode reply A'
 #ifdef	ESP_PLATFORM
-	// TODO
+   // TODO
 #else
    if (EVP_DecryptInit_ex (d->ctx, cipher, NULL, key, d->cmac) != 1)
       return "Decrypt error";
@@ -550,7 +550,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    memset (d->cmac, 0, keylen);
    memset (d->sk1, 0, keylen);
 #ifdef	ESP_PLATFORM
-	// TODO
+   // TODO
 #else
    if (EVP_EncryptInit_ex (d->ctx, cipher, NULL, d->sk0, d->cmac) != 1)
       return "Encrypt error";
@@ -591,9 +591,9 @@ df_authenticate (df_t * d, unsigned char keyno, unsigned char key[16])
 {                               // Authenticate with a key (AES)
    return df_authenticate_general (d, keyno, 16, key
 #ifndef	ESP_PLATFORM
-,EVP_aes_128_cbc ()
+                                   , EVP_aes_128_cbc ()
 #endif
-);
+      );
 }
 
 #ifndef	ESP_PLATFORM
@@ -689,7 +689,7 @@ df_format (df_t * d, unsigned char key[16])
    if (!version)
    {                            // DES!
 #ifdef	ESP_PLATFORM
-	return "Needs conversion from DES to AES";
+      return "Needs conversion from DES to AES";
 #else
       if ((e = df_des_authenticate (d, 0, key)))
          return e;
