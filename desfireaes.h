@@ -15,6 +15,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifndef	DESFIREAES_H
+#define DESFIREAES_H
+
 // Types
 
 // The data exchange function talks to the card
@@ -169,3 +172,5 @@ const char *df_get_value (df_t * d, unsigned char fileno, unsigned char comms, u
 const char *df_commit (df_t *);
 // Abort
 const char *df_abort (df_t *);
+
+#endif
