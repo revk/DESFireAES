@@ -92,7 +92,7 @@ cmac (df_t * d, unsigned int len, unsigned char *data)
 #ifdef	ESP_PLATFORM
 	// TODO
 #else
-   int n,
+   int n;
    EVP_EncryptInit_ex (d->ctx, d->cipher, NULL, d->sk0, d->cmac);
    EVP_CIPHER_CTX_set_padding (d->ctx, 0);
 #endif
