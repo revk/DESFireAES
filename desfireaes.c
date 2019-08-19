@@ -16,7 +16,7 @@
 */
 
 #ifdef	ESP_PLATFORM
-
+#include <esp_system.h>
 #else
 #include <stdio.h>
 #include <err.h>
@@ -47,6 +47,43 @@ dump (const char *prefix, unsigned int len, unsigned char *data)
 }
 #else
 #define dump(p,l,d)
+#endif
+
+// Random
+#ifdef	ESP_PLATFORM
+#define	fill_random	esp_fill_random
+#else
+void fill_random(unsigned char *buf,size_t size)
+   {                            // Create our random A value
+      int f = open ("/dev/urandom", O_RDONLY);
+      if (f < 0)
+         err (1, "random");
+      if (read (f, buf, size) != size)
+         err (1, "random");
+      close (f);
+   }
+#endif
+
+// Decrypt block
+#ifdef ESP_PLATFORM
+#define decrypt(ctx,cipher,key,iv,out,in,len) aes_decrypt(key,iv,out,in,len)
+const char * aes_decrypt(const unsigned char *key,const unsigned char *iv,unsigned char *out,const unsigned char *in,int len)
+{
+ // Don't overwrite source unless also dest
+return "TODO";
+}
+#else
+const char * decrypt(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *cipher, const unsigned char *key,const unsigned char *iv,unsigned char *out,const unsigned char *in,int len)
+{
+   if (EVP_DecryptInit_ex (ctx, cipher, NULL, key, iv) != 1)
+      return "Decrypt error";
+   EVP_CIPHER_CTX_set_padding (d->ctx, 0);
+   if (EVP_DecryptUpdate (ctx, out, &n, in len) != 1)
+      return "Decrypt error";
+   if (EVP_DecryptFinal_ex (>ctx, out + n, &n) != 1)
+      return "Decrypt error";
+return NULL;
+}
 #endif
 
 // Simplify buffer loading
@@ -285,16 +322,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
       {                         // Encrypted
          if (len != ((rxenc + 3) | 15) + 2)
             return "Rx Bad encrypted length";
-#ifdef	ESP_PLATFORM
-         // TODO
-#else
-         EVP_DecryptInit_ex (d->ctx, d->cipher, NULL, d->sk0, d->cmac);
-         EVP_CIPHER_CTX_set_padding (d->ctx, 0);
-         memcpy (d->cmac, buf + len - d->keylen, d->keylen);
-         int n;
-         EVP_DecryptUpdate (d->ctx, buf + 1, &n, buf + 1, len - 1);
-         EVP_DecryptFinal (d->ctx, buf + n, &n);
-#endif
+         decrypt(d->ctx, d->cipher,d->sk0, d->cmac, buf + 1, buf + 1,len-1);
          dump ("Dec", len, buf);
          unsigned int c = buf4 (rxenc);
          buf[rxenc] = buf[0];   // Status at end of playload
@@ -469,31 +497,10 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
       return e;
    if (rlen != keylen + 1)
       return "Bad response length for auth";
-#ifdef	ESP_PLATFORM
-   // TODO
-#else
-   {                            // Create our random A value
-      int f = open ("/dev/urandom", O_RDONLY);
-      if (f < 0)
-         err (1, "random");
-      if (read (f, d->sk1, keylen) != keylen)
-         err (1, "random");
-      close (f);
-   }
-#endif
+   fill_random(d->sk1, keylen);
    // Decode B value
    memset (d->cmac, 0, keylen);
-#ifdef	ESP_PLATFORM
-   // TODO
-#else
-   if (EVP_DecryptInit_ex (d->ctx, cipher, NULL, key, d->cmac) != 1)
-      return "Decrypt error";
-   EVP_CIPHER_CTX_set_padding (d->ctx, 0);
-   if (EVP_DecryptUpdate (d->ctx, d->sk2, &n, buf + 1, keylen) != 1)
-      return "Decrypt error";
-   if (EVP_DecryptFinal_ex (d->ctx, d->sk2 + n, &n) != 1)
-      return "Decrypt error";
-#endif
+   decrypt(d->ctx, d->cipher,key, d->cmac, d->sk2, buf + 1,keylen);
    memcpy (d->cmac, buf + 1, keylen);
    // Make response A+B'
    memcpy (buf + 1, d->sk1, keylen);
@@ -518,17 +525,8 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    if (rlen != keylen + 1)
       return "Bad response length for auth";
    // Decode reply A'
-#ifdef	ESP_PLATFORM
-   // TODO
-#else
-   if (EVP_DecryptInit_ex (d->ctx, cipher, NULL, key, d->cmac) != 1)
-      return "Decrypt error";
-   EVP_CIPHER_CTX_set_padding (d->ctx, 0);
-   if (EVP_DecryptUpdate (d->ctx, buf + 1, &n, buf + 1, keylen) != 1)
-      return "Decrypt error";
-   if (EVP_DecryptFinal_ex (d->ctx, buf + 1 + n, &n) != 1)
-      return "Decrypt error";
-#endif
+   if((e=decrypt(d->ctx, d->cipher,key, d->cmac, buf+1,buf + 1,keylen)))
+return e;
    // Check A'
    if (memcmp (buf + 1, d->sk1 + 1, keylen - 1) || buf[keylen] != d->sk1[0])
       return "Auth failed";
