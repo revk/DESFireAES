@@ -53,36 +53,41 @@ dump (const char *prefix, unsigned int len, unsigned char *data)
 #ifdef	ESP_PLATFORM
 #define	fill_random	esp_fill_random
 #else
-void fill_random(unsigned char *buf,size_t size)
-   {                            // Create our random A value
-      int f = open ("/dev/urandom", O_RDONLY);
-      if (f < 0)
-         err (1, "random");
-      if (read (f, buf, size) != size)
-         err (1, "random");
-      close (f);
-   }
+void
+fill_random (unsigned char *buf, size_t size)
+{                               // Create our random A value
+   int f = open ("/dev/urandom", O_RDONLY);
+   if (f < 0)
+      err (1, "random");
+   if (read (f, buf, size) != size)
+      err (1, "random");
+   close (f);
+}
 #endif
 
 // Decrypt block
 #ifdef ESP_PLATFORM
 #define decrypt(ctx,cipher,key,iv,out,in,len) aes_decrypt(key,iv,out,in,len)
-const char * aes_decrypt(const unsigned char *key,const unsigned char *iv,unsigned char *out,const unsigned char *in,int len)
+const char *
+aes_decrypt (const unsigned char *key, const unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
 {
- // Don't overwrite source unless also dest
-return "TODO";
+   // Don't overwrite source unless also dest
+   return "TODO";
 }
 #else
-const char * decrypt(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *cipher, const unsigned char *key,const unsigned char *iv,unsigned char *out,const unsigned char *in,int len)
+const char *
+decrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, const unsigned char *key, const unsigned char *iv, unsigned char *out,
+         const unsigned char *in, int len)
 {
    if (EVP_DecryptInit_ex (ctx, cipher, NULL, key, iv) != 1)
       return "Decrypt error";
-   EVP_CIPHER_CTX_set_padding (d->ctx, 0);
-   if (EVP_DecryptUpdate (ctx, out, &n, in len) != 1)
+   EVP_CIPHER_CTX_set_padding (ctx, 0);
+   int n;
+   if (EVP_DecryptUpdate (ctx, out, &n, in, len) != 1)
       return "Decrypt error";
-   if (EVP_DecryptFinal_ex (>ctx, out + n, &n) != 1)
+   if (EVP_DecryptFinal_ex (ctx, out + n, &n) != 1)
       return "Decrypt error";
-return NULL;
+   return NULL;
 }
 #endif
 
@@ -322,7 +327,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
       {                         // Encrypted
          if (len != ((rxenc + 3) | 15) + 2)
             return "Rx Bad encrypted length";
-         decrypt(d->ctx, d->cipher,d->sk0, d->cmac, buf + 1, buf + 1,len-1);
+         decrypt (d->ctx, d->cipher, d->sk0, d->cmac, buf + 1, buf + 1, len - 1);
          dump ("Dec", len, buf);
          unsigned int c = buf4 (rxenc);
          buf[rxenc] = buf[0];   // Status at end of playload
@@ -497,10 +502,10 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
       return e;
    if (rlen != keylen + 1)
       return "Bad response length for auth";
-   fill_random(d->sk1, keylen);
+   fill_random (d->sk1, keylen);
    // Decode B value
    memset (d->cmac, 0, keylen);
-   decrypt(d->ctx, d->cipher,key, d->cmac, d->sk2, buf + 1,keylen);
+   decrypt (d->ctx, d->cipher, key, d->cmac, d->sk2, buf + 1, keylen);
    memcpy (d->cmac, buf + 1, keylen);
    // Make response A+B'
    memcpy (buf + 1, d->sk1, keylen);
@@ -525,8 +530,8 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    if (rlen != keylen + 1)
       return "Bad response length for auth";
    // Decode reply A'
-   if((e=decrypt(d->ctx, d->cipher,key, d->cmac, buf+1,buf + 1,keylen)))
-return e;
+   if ((e = decrypt (d->ctx, d->cipher, key, d->cmac, buf + 1, buf + 1, keylen)))
+      return e;
    // Check A'
    if (memcmp (buf + 1, d->sk1 + 1, keylen - 1) || buf[keylen] != d->sk1[0])
       return "Auth failed";
