@@ -71,18 +71,18 @@ fill_random (unsigned char *buf, size_t size)
 const char *
 aes_decrypt (const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
 {
-len=(len+15)/16*16;
+   len = (len + 15) / 16 * 16;
    // Don't overwrite source unless also dest
    return "TODO";
 }
 #else
 const char *
-decrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen,const unsigned char *key, const unsigned char *iv, unsigned char *out,
-         const unsigned char *in, int len)
+decrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsigned char *key, unsigned char *iv,
+         unsigned char *out, const unsigned char *in, int len)
 {
-len=(len+keylen-1)/keylen*keylen;
-unsigned char newiv[keylen];
-   memcpy (newiv, in + len-keylen,keylen);
+   len = (len + keylen - 1) / keylen * keylen;
+   unsigned char newiv[keylen];
+   memcpy (newiv, in + len - keylen, keylen);
    if (EVP_DecryptInit_ex (ctx, cipher, NULL, key, iv) != 1)
       return "Decrypt error";
    EVP_CIPHER_CTX_set_padding (ctx, 0);
@@ -91,7 +91,7 @@ unsigned char newiv[keylen];
       return "Decrypt error";
    if (EVP_DecryptFinal_ex (ctx, out + n, &n) != 1)
       return "Decrypt error";
-   memcpy (iv,newiv,keylen);
+   memcpy (iv, newiv, keylen);
    return NULL;
 }
 #endif
@@ -102,26 +102,28 @@ unsigned char newiv[keylen];
 const char *
 aes_encrypt (const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
 {
-len=(len+15)/16*16;
+   len = (len + 15) / 16 * 16;
    // Don't overwrite source unless also dest
    return "TODO";
 }
+
    // TODO
 #else
 const char *
-encrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen,const unsigned char *key, const unsigned char *iv, unsigned char *out,
-         const unsigned char *in, int len)
+encrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsigned char *key, unsigned char *iv,
+         unsigned char *out, const unsigned char *in, int len)
 {
-len=(len+keylen-1)/keylen*keylen;
+   len = (len + keylen - 1) / keylen * keylen;
    if (EVP_EncryptInit_ex (ctx, cipher, NULL, key, iv) != 1)
       return "Encrypt error";
    EVP_CIPHER_CTX_set_padding (ctx, 0);
+   int n;
    if (EVP_EncryptUpdate (ctx, out, &n, in, len) != 1)
       return "Encrypt error";
    if (EVP_EncryptFinal_ex (ctx, out + n, &n) != 1)
       return "Encrypt error";
-   memcpy (iv, in + len-keylen,keylen);
-return NULL;
+   memcpy (iv, in + len - keylen, keylen);
+   return NULL;
 }
 #endif
 
@@ -162,16 +164,17 @@ static void
 cmac (df_t * d, unsigned int len, unsigned char *data)
 {                               // Process CMAC
 #ifdef	ESP_PLATFORM
-int keylen=16;
+   int keylen = 16;
 #else
-int keylen=d->keylen;
+   int keylen = d->keylen;
 #endif
    dump ("CMAC of", len, data);
-   unsigned char temp[d->keylen]; // For last block
-   int last=len-(len%keylen?:len?keylen:0);
-   int p=len-last;
-   if(p)memcpy(temp,data+last,p);
-   if (p&&p<keylen)
+   unsigned char temp[d->keylen];       // For last block
+   int last = len - (len % keylen ? : len ? keylen : 0);
+   int p = len - last;
+   if (p)
+      memcpy (temp, data + last, p);
+   if (p && p < keylen)
    {                            // pad
       temp[p++] = 0x80;
       while (p < keylen)
@@ -181,10 +184,10 @@ int keylen=d->keylen;
    } else
       for (p = 0; p < keylen; p++)
          temp[p] ^= d->sk1[p];
-if(last)
-encrypt(d->ctx, d->cipher,keylen, d->sk0, d->cmac,data,data,last);
-if(last<len)
-encrypt(d->ctx,d->cipher,keylen,d->sk0,d->cmac,data+last,temp,len-last);
+   if (last)
+      encrypt (d->ctx, d->cipher, keylen, d->sk0, d->cmac, data, data, last);
+   if (last < len)
+      encrypt (d->ctx, d->cipher, keylen, d->sk0, d->cmac, data + last, temp, len - last);
    dump ("CMAC", d->keylen, d->cmac);
 }
 
@@ -262,7 +265,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
          while ((len - txenc) % d->keylen)
             buf[len++] = 0;
          dump ("Pre enc", len, buf);
-   encrypt (d->ctx, d->cipher,d->keylen, d->sk0, d->cmac,buf + txenc,buf + txenc,len - txenc);
+         encrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, buf + txenc, buf + txenc, len - txenc);
          dump ("Tx(enc)", len, buf);
       } else
          cmac (d, len, buf);    // CMAC update
@@ -334,7 +337,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
       {                         // Encrypted
          if (len != ((rxenc + 3) | 15) + 2)
             return "Rx Bad encrypted length";
-         decrypt (d->ctx, d->cipher, d->keylen,d->sk0, d->cmac, buf + 1, buf + 1, len - 1);
+         decrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, buf + 1, buf + 1, len - 1);
          dump ("Dec", len, buf);
          unsigned int c = buf4 (rxenc);
          buf[rxenc] = buf[0];   // Status at end of playload
@@ -512,20 +515,20 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    fill_random (d->sk1, keylen);
    // Decode B value
    memset (d->cmac, 0, keylen);
-   decrypt (d->ctx, cipher, keylen,key, d->cmac, d->sk2, buf + 1, keylen);
+   decrypt (d->ctx, cipher, keylen, key, d->cmac, d->sk2, buf + 1, keylen);
    // Make response A+B'
    memcpy (buf + 1, d->sk1, keylen);
    memcpy (buf + keylen + 1, d->sk2 + 1, keylen - 1);
    buf[keylen * 2] = d->sk2[0];
    // Encrypt response
-   encrypt (d->ctx, d->cipher,d->keylen, key, d->cmac, buf+1, buf + 1, keylen*2);
+   encrypt (d->ctx, d->cipher, d->keylen, key, d->cmac, buf + 1, buf + 1, keylen * 2);
    // Send response
    if ((e = df_dx (d, 0xAF, sizeof (buf), buf, 1 + keylen * 2, 0, 0, &rlen)))
       return e;
    if (rlen != keylen + 1)
       return "Bad response length for auth";
    // Decode reply A'
-   if ((e = decrypt (d->ctx, cipher,keylen, key, d->cmac, buf + 1, buf + 1, keylen)))
+   if ((e = decrypt (d->ctx, cipher, keylen, key, d->cmac, buf + 1, buf + 1, keylen)))
       return e;
    // Check A'
    if (memcmp (buf + 1, d->sk1 + 1, keylen - 1) || buf[keylen] != d->sk1[0])
@@ -547,7 +550,8 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    // Make SK1
    memset (d->cmac, 0, keylen);
    memset (d->sk1, 0, keylen);
-   if((e=encrypt (d->ctx, d->cipher,d->keylen, d->sk0, d->cmac, d->sk1,d->sk1,keylen)))return e;
+   if ((e = encrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, d->sk1, d->sk1, keylen)))
+      return e;
    // Shift SK1
    unsigned char xor = 0;
    if (d->sk1[0] & 0x80)
