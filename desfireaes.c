@@ -18,6 +18,7 @@
 #ifdef	ESP_PLATFORM
 #include <esp_system.h>
 #include <esp32/aes.h>
+#include "esp_log.h"
 #else
 #include <stdio.h>
 #include <err.h>
@@ -34,17 +35,21 @@
 
 #include "desfireaes.h"
 
-//#define DEBUG
+//#define DEBUG ESP_LOG_INFO
 
 #ifdef DEBUG
 static void
 dump (const char *prefix, unsigned int len, unsigned char *data)
 {
+#ifdef ESP_PLATFORM
+   ESP_LOG_BUFFER_HEX_LEVEL (prefix, data, len, DEBUG);
+#else
    int n;
    fprintf (stderr, "%-10s", prefix);
    for (n = 0; n < len; n++)
       fprintf (stderr, " %02X", data[n]);
    fprintf (stderr, "\n");
+#endif
 }
 #else
 #define dump(p,l,d)
@@ -68,15 +73,22 @@ fill_random (unsigned char *buf, size_t size)
 
 // Decrypt, updating iv
 #ifdef ESP_PLATFORM
-#define decrypt(ctx,cipher,keylen,key,iv,out,in,len) aes_decrypt(key,iv,out,in,len)
+#define decrypt(ctx,cipher,keylen,key,iv,out,in,len) aes_decrypt(keylen,key,iv,out,in,len)
 static const char *
-aes_decrypt (const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
+aes_decrypt (int keylen, const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
 {
    len = (len + 15) / 16 * 16;
+   //ESP_LOG_BUFFER_HEX_LEVEL ("AES Dec", key, keylen, ESP_LOG_INFO);
+   //ESP_LOG_BUFFER_HEX_LEVEL ("AES In ", in, len, ESP_LOG_INFO);
    esp_aes_context ctx;
-   esp_err_t err = esp_aes_crypt_cbc (&ctx, ESP_AES_DECRYPT, len, iv, in, out);
+   esp_aes_init (&ctx);
+   esp_err_t err = esp_aes_setkey (&ctx, key, keylen * 8);
+   if (!err)
+      err = esp_aes_crypt_cbc (&ctx, ESP_AES_DECRYPT, len, iv, in, out);
+   esp_aes_free (&ctx);
    if (err)
       return esp_err_to_name (err);
+   //ESP_LOG_BUFFER_HEX_LEVEL ("AES Out", out, len, ESP_LOG_INFO);
    return NULL;
 }
 #else
@@ -102,13 +114,20 @@ decrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsi
 
 // Encrypt, updating iv
 #ifdef	ESP_PLATFORM
-#define encrypt(ctx,cipher,keylen,key,iv,out,in,len) aes_encrypt(key,iv,out,in,len)
+#define encrypt(ctx,cipher,keylen,key,iv,out,in,len) aes_encrypt(keylen,key,iv,out,in,len)
 static const char *
-aes_encrypt (const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
+aes_encrypt (int keylen, const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
 {
    len = (len + 15) / 16 * 16;
+   //ESP_LOG_BUFFER_HEX_LEVEL ("AES Enc", key, keylen, ESP_LOG_INFO);
+   //ESP_LOG_BUFFER_HEX_LEVEL ("AES In ", in, len, ESP_LOG_INFO);
    esp_aes_context ctx;
-   esp_err_t err = esp_aes_crypt_cbc (&ctx, ESP_AES_ENCRYPT, len, iv, in, out);
+   esp_aes_init (&ctx);
+   esp_err_t err = esp_aes_setkey (&ctx, key, keylen * 8);
+   if (!err)
+      err = esp_aes_crypt_cbc (&ctx, ESP_AES_ENCRYPT, len, iv, in, out);
+   esp_aes_free (&ctx);
+   //ESP_LOG_BUFFER_HEX_LEVEL ("AES Out", out, len, ESP_LOG_INFO);
    if (err)
       return esp_err_to_name (err);
    return NULL;
@@ -170,31 +189,26 @@ df_hex (unsigned int max, unsigned char *dst, const char *src)
 static void
 cmac (df_t * d, unsigned int len, unsigned char *data)
 {                               // Process CMAC
-#ifdef	ESP_PLATFORM
-   int keylen = 16;
-#else
-   int keylen = d->keylen;
-#endif
    dump ("CMAC of", len, data);
    unsigned char temp[d->keylen];       // For last block
-   int last = len - (len % keylen ? : len ? keylen : 0);
+   int last = len - (len % d->keylen ? : len ? d->keylen : 0);
    int p = len - last;
    if (p)
       memcpy (temp, data + last, p);
-   if (p && p < keylen)
+   if (p && p < d->keylen)
    {                            // pad
       temp[p++] = 0x80;
-      while (p < keylen)
+      while (p < d->keylen)
          temp[p++] = 0;
-      for (p = 0; p < keylen; p++)
+      for (p = 0; p < d->keylen; p++)
          temp[p] ^= d->sk2[p];
    } else
-      for (p = 0; p < keylen; p++)
+      for (p = 0; p < d->keylen; p++)
          temp[p] ^= d->sk1[p];
    if (last)
-      encrypt (d->ctx, d->cipher, keylen, d->sk0, d->cmac, data, data, last);
+      encrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, data, data, last);
    if (last < len)
-      encrypt (d->ctx, d->cipher, keylen, d->sk0, d->cmac, data + last, temp, len - last);
+      encrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, data + last, temp, len - last);
    dump ("CMAC", d->keylen, d->cmac);
 }
 
@@ -528,7 +542,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    memcpy (buf + keylen + 1, d->sk2 + 1, keylen - 1);
    buf[keylen * 2] = d->sk2[0];
    // Encrypt response
-   encrypt (d->ctx, d->cipher, d->keylen, key, d->cmac, buf + 1, buf + 1, keylen * 2);
+   encrypt (d->ctx, cipher, keylen, key, d->cmac, buf + 1, buf + 1, keylen * 2);
    // Send response
    if ((e = df_dx (d, 0xAF, sizeof (buf), buf, 1 + keylen * 2, 0, 0, &rlen)))
       return e;
@@ -543,13 +557,13 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    // Mark as logged in
 #ifndef ESP_PLATFORM
    d->cipher = cipher;
-   d->keylen = keylen;
 #endif
-   dump ("A", d->keylen, d->sk1);
-   dump ("B", d->keylen, d->sk2);
+   d->keylen = keylen;
+   dump ("A", keylen, d->sk1);
+   dump ("B", keylen, d->sk2);
    memcpy (d->sk0 + 0, d->sk1 + 0, 4);
    memcpy (d->sk0 + 4, d->sk2 + 0, 4);
-   if (d->keylen > 8)
+   if (keylen > 8)
    {
       memcpy (d->sk0 + 8, d->sk1 + 12, 4);
       memcpy (d->sk0 + 12, d->sk2 + 12, 4);
@@ -557,7 +571,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, un
    // Make SK1
    memset (d->cmac, 0, keylen);
    memset (d->sk1, 0, keylen);
-   if ((e = encrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, d->sk1, d->sk1, keylen)))
+   if ((e = encrypt (d->ctx, cipher, keylen, d->sk0, d->cmac, d->sk1, d->sk1, keylen)))
       return e;
    // Shift SK1
    unsigned char xor = 0;
