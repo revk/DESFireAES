@@ -35,7 +35,7 @@
 
 #include "desfireaes.h"
 
-//#define DEBUG ESP_LOG_INFO
+#define DEBUG ESP_LOG_INFO
 
 #ifdef DEBUG
 static void
@@ -77,6 +77,8 @@ fill_random (unsigned char *buf, size_t size)
 static const char *
 aes_decrypt (int keylen, const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
 {
+   if (len <= 0)
+      return NULL;
    len = (len + 15) / 16 * 16;
    //ESP_LOG_BUFFER_HEX_LEVEL ("AES Dec", key, keylen, ESP_LOG_INFO);
    //ESP_LOG_BUFFER_HEX_LEVEL ("AES In ", in, len, ESP_LOG_INFO);
@@ -118,6 +120,8 @@ decrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsi
 static const char *
 aes_encrypt (int keylen, const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
 {
+   if (len <= 0)
+      return NULL;
    len = (len + 15) / 16 * 16;
    //ESP_LOG_BUFFER_HEX_LEVEL ("AES Enc", key, keylen, ESP_LOG_INFO);
    //ESP_LOG_BUFFER_HEX_LEVEL ("AES In ", in, len, ESP_LOG_INFO);
@@ -125,15 +129,20 @@ aes_encrypt (int keylen, const unsigned char *key, unsigned char *iv, unsigned c
    esp_aes_init (&ctx);
    esp_err_t err = esp_aes_setkey (&ctx, key, keylen * 8);
    if (!err)
-      err = esp_aes_crypt_cbc (&ctx, ESP_AES_ENCRYPT, len, iv, in, out);
+   {
+      unsigned char *o = out;
+      if (!out)
+         o = malloc (len);      // TODO may be better to do the CBC a block at a time with lower level calls, 
+      err = esp_aes_crypt_cbc (&ctx, ESP_AES_ENCRYPT, len, iv, in, o);
+      if (!out)
+         free (o);
+   }
    esp_aes_free (&ctx);
-   //ESP_LOG_BUFFER_HEX_LEVEL ("AES Out", out, len, ESP_LOG_INFO);
+   //if(out)ESP_LOG_BUFFER_HEX_LEVEL ("AES Out", out, len, ESP_LOG_INFO);
    if (err)
       return esp_err_to_name (err);
    return NULL;
 }
-
-   // TODO
 #else
 static const char *
 encrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsigned char *key, unsigned char *iv,
@@ -142,12 +151,19 @@ encrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsi
    len = (len + keylen - 1) / keylen * keylen;
    if (EVP_EncryptInit_ex (ctx, cipher, NULL, key, iv) != 1)
       return "Encrypt error";
+   unsigned char *o = out;
+   if (!out)
+      o = malloc (len);         // TODO may be better to do the CBC a block at a time with lower level calls, 
    EVP_CIPHER_CTX_set_padding (ctx, 0);
    int n;
-   if (EVP_EncryptUpdate (ctx, out, &n, in, len) != 1)
+   if (EVP_EncryptUpdate (ctx, o, &n, in, len) != 1 || EVP_EncryptFinal_ex (ctx, o + n, &n) != 1)
+   {
+      if (!out)
+         free (o);
       return "Encrypt error";
-   if (EVP_EncryptFinal_ex (ctx, out + n, &n) != 1)
-      return "Encrypt error";
+   }
+   if (!out)
+      free (o);
    memcpy (iv, in + len - keylen, keylen);
    return NULL;
 }
@@ -206,9 +222,9 @@ cmac (df_t * d, unsigned int len, unsigned char *data)
       for (p = 0; p < d->keylen; p++)
          temp[p] ^= d->sk1[p];
    if (last)
-      encrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, data, data, last);
+      encrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, NULL, data, last);
    if (last < len)
-      encrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, data + last, temp, len - last);
+      encrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, NULL, temp, len - last);
    dump ("CMAC", d->keylen, d->cmac);
 }
 
