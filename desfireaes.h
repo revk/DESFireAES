@@ -109,7 +109,8 @@ const char *df_init (df_t *, void *obj, df_dx_func_t * dx);
 // Examples
 //  Cmd 54 with txenc 1, rxenc 0, and len 2, adds CRC and encrypts from byte 1, returns rlen 1 (status byte)
 //  Cmd 51 with txenc 0, rxenc 8, and len 1, sends 51, receives 17 bytes, decrypts and checks CRC at byte 8, returns rlen 8 (status + 7 byte UID)
-const char* df_dx(df_t*d,unsigned char cmd,unsigned int max,unsigned char*data,unsigned int txlen,unsigned char txenc,unsigned char rxenc,unsigned int *rlen);
+const char *df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *data, unsigned int txlen, unsigned char txenc,
+                   unsigned char rxenc, unsigned int *rlen);
 
 // Main application functions
 
@@ -146,7 +147,8 @@ const char *df_get_uid (df_t * d, unsigned char uid[7]);
 const char *df_get_file_ids (df_t * d, unsigned long long *ids);        // File IDs 0-63 as bits
 
 // Change existing file settings
-const char * df_change_file_settings (df_t * d, unsigned char fileno, unsigned char comms, unsigned short oldaccess, unsigned short access);
+const char *df_change_file_settings (df_t * d, unsigned char fileno, unsigned char comms, unsigned short oldaccess,
+                                     unsigned short access);
 
 // File types are character D=Data, B=Backup, V=Value, C=Cyclic, L=Linear
 const char *df_get_file_settings (df_t * d, unsigned char fileno, char *type, unsigned char *comms,

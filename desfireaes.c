@@ -17,6 +17,7 @@
 
 #ifdef	ESP_PLATFORM
 #include <esp_system.h>
+#include <esp32/aes.h>
 #else
 #include <stdio.h>
 #include <err.h>
@@ -68,15 +69,18 @@ fill_random (unsigned char *buf, size_t size)
 // Decrypt, updating iv
 #ifdef ESP_PLATFORM
 #define decrypt(ctx,cipher,keylen,key,iv,out,in,len) aes_decrypt(key,iv,out,in,len)
-const char *
+static const char *
 aes_decrypt (const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
 {
    len = (len + 15) / 16 * 16;
-   // Don't overwrite source unless also dest
-   return "TODO";
+   esp_aes_context ctx;
+   esp_err_t err = esp_aes_crypt_cbc (&ctx, ESP_AES_DECRYPT, len, iv, in, out);
+   if (err)
+      return esp_err_to_name (err);
+   return NULL;
 }
 #else
-const char *
+static const char *
 decrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsigned char *key, unsigned char *iv,
          unsigned char *out, const unsigned char *in, int len)
 {
@@ -99,17 +103,20 @@ decrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsi
 // Encrypt, updating iv
 #ifdef	ESP_PLATFORM
 #define encrypt(ctx,cipher,keylen,key,iv,out,in,len) aes_encrypt(key,iv,out,in,len)
-const char *
+static const char *
 aes_encrypt (const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
 {
    len = (len + 15) / 16 * 16;
-   // Don't overwrite source unless also dest
-   return "TODO";
+   esp_aes_context ctx;
+   esp_err_t err = esp_aes_crypt_cbc (&ctx, ESP_AES_ENCRYPT, len, iv, in, out);
+   if (err)
+      return esp_err_to_name (err);
+   return NULL;
 }
 
    // TODO
 #else
-const char *
+static const char *
 encrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsigned char *key, unsigned char *iv,
          unsigned char *out, const unsigned char *in, int len)
 {
