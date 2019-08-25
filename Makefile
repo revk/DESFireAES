@@ -1,2 +1,2 @@
 desfireaes.o: desfireaes.c
-	cc -fPIC -O -DLIB -c -o $@ $<
+	cc -fPIC -O -DLIB -c -o $@ -Iinclude $<
