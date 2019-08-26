@@ -35,7 +35,9 @@
 
 #include "desfireaes.h"
 
+// TODO Kconfig
 //#define DEBUG ESP_LOG_INFO
+//#define DEBUG_CMAC
 
 #ifdef DEBUG
 static void
@@ -205,7 +207,9 @@ df_hex (unsigned int max, unsigned char *dst, const char *src)
 static void
 cmac (df_t * d, unsigned int len, unsigned char *data)
 {                               // Process CMAC
+#ifdef DEBUG_CMAC
    dump ("CMAC of", len, data);
+#endif
    unsigned char temp[d->keylen];       // For last block
    int last = len - (len % d->keylen ? : len ? d->keylen : 0);
    int p = len - last;
@@ -225,7 +229,9 @@ cmac (df_t * d, unsigned int len, unsigned char *data)
       encrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, NULL, data, last);
    if (last < len)
       encrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, NULL, temp, len - last);
+#ifdef DEBUG_CMAC
    dump ("CMAC", d->keylen, d->cmac);
+#endif
 }
 
 unsigned int
@@ -357,6 +363,8 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
             *buf = *p;
             memmove (p, p + 1, --b);
          }
+         if (!b && *buf == 0xAF)
+            break;              // we have no data to send
          p += b;
          if (*buf != 0xAF || cmd == 0xAA || cmd == 0x1A || cmd == 0x0A)
             break;              // done
@@ -966,7 +974,7 @@ df_read_data (df_t * d, unsigned char fileno, unsigned char comms, unsigned int 
    wbuf1 (fileno);
    wbuf3 (offset);
    wbuf3 (len);
-   const char *e = df_dx (d, 0xBD, sizeof (buf), buf, n, 0, (comms & DF_MODE_ENC) ? len : 0, &rlen);
+   const char *e = df_dx (d, 0xBD, sizeof (buf), buf, n, 0, (comms & DF_MODE_ENC) ? 8 : 0, &rlen);
    if (e)
       return e;
    if (rlen != len + 1)
@@ -1011,4 +1019,34 @@ df_get_value (df_t * d, unsigned char fileno, unsigned char comms, unsigned int 
    if (value)
       *value = buf4 (1);
    return NULL;
+}
+
+const char *
+df_credit (df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta)
+{
+   unsigned char buf[32];
+   unsigned int n = 1;
+   wbuf1 (fileno);
+   wbuf4 (delta);
+   return df_dx (d, 0x0C, sizeof (buf), buf, n, (comms & DF_MODE_CMAC) ? 0xFF : 0, 0, NULL);
+}
+
+const char *
+df_limited_credit (df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta)
+{
+   unsigned char buf[32];
+   unsigned int n = 1;
+   wbuf1 (fileno);
+   wbuf4 (delta);
+   return df_dx (d, 0x1C, sizeof (buf), buf, n, (comms & DF_MODE_CMAC) ? 0xFF : 0, 0, NULL);
+}
+
+const char *
+df_debit (df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta)
+{
+   unsigned char buf[32];
+   unsigned int n = 1;
+   wbuf1 (fileno);
+   wbuf4 (delta);
+   return df_dx (d, 0xDC, sizeof (buf), buf, n, (comms & DF_MODE_CMAC) ? 0xFF : 0, 0, NULL);
 }

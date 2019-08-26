@@ -175,4 +175,9 @@ const char *df_commit (df_t *);
 // Abort
 const char *df_abort (df_t *);
 
+// Credit/Debitt
+const char *df_credit (df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta);
+const char *df_limited_credit (df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta);
+const char *df_debit (df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta);
+
 #endif
