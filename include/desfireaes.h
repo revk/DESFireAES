@@ -26,8 +26,8 @@
 // Does not do any special handling of AF, etc.
 // Returns length received
 // Returns 0 for card gone
-// Returns -ve for any other error
-typedef int df_dx_func_t (void *obj, unsigned int len, unsigned char *data, unsigned int max);
+// Returns -ve for any other error (should store error in errstr)
+typedef int df_dx_func_t (void *obj, unsigned int len, unsigned char *data, unsigned int max, const char **errstr);
 
 typedef struct df_s df_t;
 struct df_s

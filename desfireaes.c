@@ -323,9 +323,10 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
          if (p > buf)
             *--p = 0xAF;
          dump ("Tx(raw)", TXMAX, p);
-         int b = d->dx (d->obj, TXMAX, p, 1);
+         const char *errstr = NULL;
+         int b = d->dx (d->obj, TXMAX, p, 1, &errstr);
          if (b < 0)
-            return "Dx fail";
+            return errstr ? : "Dx fail";
          dump ("Rx(raw)", b, p);
          if (!b)
          {
@@ -349,9 +350,10 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
       while (p < e)
       {
          dump ("Tx(raw)", len, p);
-         int b = d->dx (d->obj, len, p, e - p);
+         const char *errstr = NULL;
+         int b = d->dx (d->obj, len, p, e - p, &errstr);
          if (b < 0)
-            return "Dx fail";
+            return errstr ? : "Dx fail";
          dump ("Rx(raw)", b, p);
          if (!b)
          {
