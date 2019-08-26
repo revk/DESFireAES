@@ -35,7 +35,7 @@
 
 #include "desfireaes.h"
 
-#define DEBUG ESP_LOG_INFO
+//#define DEBUG ESP_LOG_INFO
 
 #ifdef DEBUG
 static void
