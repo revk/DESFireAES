@@ -410,6 +410,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
    // Check response
    if (*buf && *buf != 0xAF)
    {
+      d->keylen = 0;            // Errors kick us out
       if (*buf == 0x0C)
          return "No change";
       if (*buf == 0x0E)
