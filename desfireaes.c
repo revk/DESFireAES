@@ -164,9 +164,9 @@ encrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsi
          free (o);
       return "Encrypt error";
    }
+   memcpy (iv, o + len - keylen, keylen);
    if (!out)
       free (o);
-   memcpy (iv, in + len - keylen, keylen);
    return NULL;
 }
 #endif
