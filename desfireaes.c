@@ -61,7 +61,7 @@ dump (const char *prefix, unsigned int len, unsigned char *data)
 #ifdef	ESP_PLATFORM
 #define	fill_random	esp_fill_random
 #else
-void
+static void
 fill_random (unsigned char *buf, size_t size)
 {                               // Create our random A value
    int f = open ("/dev/urandom", O_RDONLY);
@@ -164,9 +164,9 @@ encrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsi
          free (o);
       return "Encrypt error";
    }
-   memcpy (iv, o + len - keylen, keylen);
    if (!out)
       free (o);
+   memcpy (iv, in + len - keylen, keylen);
    return NULL;
 }
 #endif
@@ -235,7 +235,7 @@ cmac (df_t * d, unsigned int len, unsigned char *data)
 }
 
 unsigned int
-crc (unsigned int len, unsigned char *data)
+df_crc (unsigned int len, unsigned char *data)
 {
    dump ("CRC", len, data);
    unsigned int poly = 0xEDB88320;
@@ -254,10 +254,10 @@ crc (unsigned int len, unsigned char *data)
    return crc;
 }
 
-void
+static void
 add_crc (unsigned int len, unsigned char *src, unsigned char *dst)
 {
-   unsigned int c = crc (len, src);
+   unsigned int c = df_crc (len, src);
    dst[0] = c;
    dst[1] = c >> 8;
    dst[2] = c >> 16;
@@ -388,7 +388,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
          dump ("Dec", len, buf);
          unsigned int c = buf4 (rxenc);
          buf[rxenc] = buf[0];   // Status at end of playload
-         if (c != crc (rxenc, buf + 1))
+         if (c != df_crc (rxenc, buf + 1))
             return "Rx CRC fail";
       } else if (len > 1)
       {                         // Check CMAC
