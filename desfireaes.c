@@ -235,7 +235,7 @@ cmac (df_t * d, unsigned int len, unsigned char *data)
 }
 
 unsigned int
-df_crc (unsigned int len, unsigned char *data)
+df_crc (unsigned int len, const unsigned char *data)
 {
    dump ("CRC", len, data);
    unsigned int poly = 0xEDB88320;

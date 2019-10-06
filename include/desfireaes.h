@@ -180,6 +180,6 @@ const char *df_credit (df_t * d, unsigned char fileno, unsigned char comms, unsi
 const char *df_limited_credit (df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta);
 const char *df_debit (df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta);
 
-unsigned int df_crc (unsigned int len, unsigned char *data);
+unsigned int df_crc (unsigned int len, const unsigned char *data);
 
 #endif
