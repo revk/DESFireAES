@@ -17,7 +17,7 @@
 
 #ifdef	ESP_PLATFORM
 #include <esp_system.h>
-#include <esp32/aes.h>
+#include <esp32/esp_aes.h>
 #include "esp_log.h"
 #else
 #include <stdio.h>
