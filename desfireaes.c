@@ -720,13 +720,8 @@ const char *df_format(df_t * d, unsigned char key[16])
          return e;
       if ((e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL)))
          return e;
-      if (memcmp(key, zero, 16))
-      {                         // Set key to zeros
-         if ((e = df_authenticate(d, 0, key)))
-            return e;
-         if (e = df_change_key(d, 0, 1, key, NULL))
-            return e;
-      }
+      if (memcmp(key, zero, 16) && (e = df_change_key(d, 0x80, 1, key, NULL)))
+         return e;              // Failed to change key back to zeros
       return e;
    }
    return NULL;
