@@ -54,7 +54,7 @@ struct df_s {
 #define DF_SET_LIST		0x02
 #define DF_SET_CREATE		0x04
 #define DF_SET_CHANGE		0x08
-#define	DF_SET_DEFAULT		0x0F
+#define	DF_SET_DEFAULT		0x0F	// Default key settings for application
 
 // Functions
 // All of these functions that return a const char * return NULL for "OK" or an error message
