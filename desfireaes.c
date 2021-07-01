@@ -770,7 +770,7 @@ const char *df_delete_application(df_t * d, unsigned char aid[3])
 {
    unsigned char buf[32] = { 0 };
    memcpy(buf, aid, 3);
-   return df_dx(d, 0xDA, sizeof(buf), buf, 3, 0, 0, NULL);
+   return df_dx(d, 0xDA, sizeof(buf), buf, 4, 0, 0, NULL);
 }
 
 const char *df_create_application(df_t * d, unsigned char aid[3], unsigned char settings, unsigned char keys)
