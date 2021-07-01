@@ -725,8 +725,8 @@ const char *df_format(df_t * d, unsigned char version, unsigned char key[16])
    {                            // Set key if needed
       if (!key)
          key = zero;
-      unsigned char currentversion;
-      e = df_get_key_version(d, 0, &version);
+      unsigned char currentversion=0;
+      e = df_get_key_version(d, 0, &currentversion);
       if (!e && (currentversion != version || memcpy(currentkey, key, 16)))
          e = df_change_key(d, 0x80, version, currentkey, key);
       if (!e)
