@@ -491,7 +491,7 @@ const char *df_get_key_settings(df_t * d, unsigned char *setting, unsigned char 
    const char *e = df_dx(d, 0x45, sizeof(buf), buf, n, 0, 0, &rlen);
    if (e)
       return e;
-   if (rlen != 2)
+   if (rlen != 3)
       return "Bad length for Get Key Settings";
    if (setting)
       *setting = buf[1];
