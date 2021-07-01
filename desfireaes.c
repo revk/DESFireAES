@@ -688,6 +688,7 @@ const char *df_change_key(df_t * d, unsigned char keyno, unsigned char version, 
 
 const char *df_format(df_t * d, unsigned char key[16])
 {                               // Format card, and set AES master key all zeros with key version 01. key is existing master AES key
+	// Format change to leave key
    unsigned char zero[16] = {
       0
    };
@@ -704,6 +705,9 @@ const char *df_format(df_t * d, unsigned char key[16])
 #ifdef	ESP_PLATFORM
       return "Needs conversion from DES to AES";
 #else
+      // TODO is this needed
+      // TODO should we assume DES key is zero
+      // TODO document DES policy
       if ((e = df_des_authenticate(d, 0, key)))
          return e;
       if ((e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL)))
