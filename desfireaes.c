@@ -708,7 +708,7 @@ const char *df_format(df_t * d, unsigned char version, unsigned char key[16])
    if (e && key)
       e = df_authenticate(d, 0, currentkey = key);
    // Try zero AES key
-   if (e && !key)
+   if (e)
       e = df_authenticate(d, 0, currentkey = zero);
    if (!e)
       e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL);       // Not DES, format (does not change key)
