@@ -694,6 +694,7 @@ const char *df_format(df_t * d, unsigned char version, unsigned char key[16])
    // Card can have zero AES key
    // Card can have AES key as provided
    // End result if success is formatted using AES key as provided (or zero AES key)
+   // Leaves authenticated with new key as AID 0
    unsigned char zero[16] = {
       0
    };
@@ -719,7 +720,7 @@ const char *df_format(df_t * d, unsigned char version, unsigned char key[16])
          e = df_change_key(d, 0x80, 0, NULL, NULL);     // Change to AES
    }
    if (!e)
-      e = df_authenticate(d, 0, currentkey);    // Re-auth after format
+      e = df_authenticate(d, 0, currentkey);    // Re-auth after format or change key
    if (!e)
    {                            // Set key if needed
       if (!key)
@@ -728,6 +729,8 @@ const char *df_format(df_t * d, unsigned char version, unsigned char key[16])
       e = df_get_key_version(d, 0, &version);
       if (!e && (currentversion != version || memcpy(currentkey, key, 16)))
          e = df_change_key(d, 0x80, version, currentkey, key);
+      if (!e)
+         e = df_authenticate(d, 0, currentkey); // Re-auth after format or change key
    }
    return e;
 }
