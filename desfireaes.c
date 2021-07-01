@@ -769,7 +769,7 @@ const char *df_get_application_ids(df_t * d, unsigned int *num, unsigned int spa
 const char *df_delete_application(df_t * d, unsigned char aid[3])
 {
    unsigned char buf[32] = { 0 };
-   memcpy(buf, aid, 3);
+   memcpy(buf+1, aid, 3);
    return df_dx(d, 0xDA, sizeof(buf), buf, 4, 0, 0, NULL);
 }
 
