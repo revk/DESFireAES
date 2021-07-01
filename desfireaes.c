@@ -699,10 +699,11 @@ const char *df_format(df_t * d, unsigned char version, unsigned char key[16])
       0
    };
    unsigned char *currentkey = NULL;
-   const char *e = "Not formatted";
+   const char *e = NULL;
    // Get out of existing application / session first
    if ((d->keylen || d->aid[0] || d->aid[1] || d->aid[1]) && (e = df_select_application(d, NULL)))
       return e;
+   e = "Not formatted";
    // Try supplied key
    if (e && key)
       e = df_authenticate(d, 0, currentkey = key);
@@ -725,7 +726,7 @@ const char *df_format(df_t * d, unsigned char version, unsigned char key[16])
    {                            // Set key if needed
       if (!key)
          key = zero;
-      unsigned char currentversion=0;
+      unsigned char currentversion = 0;
       e = df_get_key_version(d, 0, &currentversion);
       if (!e && (currentversion != version || memcpy(currentkey, key, 16)))
          e = df_change_key(d, 0x80, version, currentkey, key);
