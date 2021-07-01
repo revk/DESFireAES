@@ -27,11 +27,10 @@
 // Returns length received
 // Returns 0 for card gone
 // Returns -ve for any other error (should store error in errstr)
-typedef int df_dx_func_t (void *obj, unsigned int len, unsigned char *data, unsigned int max, const char **errstr);
+typedef int df_dx_func_t(void *obj, unsigned int len, unsigned char *data, unsigned int max, const char **errstr);
 
 typedef struct df_s df_t;
-struct df_s
-{
+struct df_s {
    void *obj;                   // Opaque, passed to df_card_func
    df_dx_func_t *dx;            // Card data exchange function
 #ifndef	ESP_PLATFORM
@@ -64,10 +63,10 @@ struct df_s
 // Low level data exchange functions
 
 // Convert from hex
-unsigned int df_hex (unsigned int max, unsigned char *dst, const char *src);
+unsigned int df_hex(unsigned int max, unsigned char *dst, const char *src);
 
 // Initialise
-const char *df_init (df_t *, void *obj, df_dx_func_t * dx);
+const char *df_init(df_t *, void *obj, df_dx_func_t * dx);
 
 // Low level data exchange
 // Data exchange, sends a command and receives a response
@@ -109,77 +108,68 @@ const char *df_init (df_t *, void *obj, df_dx_func_t * dx);
 // Examples
 //  Cmd 54 with txenc 1, rxenc 0, and len 2, adds CRC and encrypts from byte 1, returns rlen 1 (status byte)
 //  Cmd 51 with txenc 0, rxenc 8, and len 1, sends 51, receives 17 bytes, decrypts and checks CRC at byte 8, returns rlen 8 (status + 7 byte UID)
-const char *df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *data, unsigned int txlen, unsigned char txenc,
-                   unsigned char rxenc, unsigned int *rlen);
+const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *data, unsigned int txlen, unsigned char txenc, unsigned char rxenc, unsigned int *rlen);
 
 // Main application functions
 
 // Get free mem
-const char *df_free_memory (df_t * d, unsigned int *mem);
+const char *df_free_memory(df_t * d, unsigned int *mem);
 // Ger version
-const char *df_get_version (df_t * d, unsigned char ver[28]);
+const char *df_get_version(df_t * d, unsigned char ver[28]);
 // Select an AID (NULL means AID 0)
-const char *df_select_application (df_t *, unsigned char aid[3]);
+const char *df_select_application(df_t *, unsigned char aid[3]);
 // Format card, and set AES master key all zeros with key version 01, key, if set, is existing master AES key
-const char *df_format (df_t *, unsigned char key[16]);
+const char *df_format(df_t *, unsigned char keyver, unsigned char key[16]);
 // Authenticate with a key
-const char *df_authenticate (df_t *, unsigned char keyno, unsigned char key[16]);
+const char *df_authenticate(df_t *, unsigned char keyno, unsigned char key[16]);
 // Get Key Version
-const char *df_get_key_version (df_t * d, unsigned char keyno, unsigned char *version);
+const char *df_get_key_version(df_t * d, unsigned char keyno, unsigned char *version);
 // Get Key settings
-const char *df_get_key_settings (df_t * d, unsigned char keyno, unsigned char *setting, unsigned char *keynos);
+const char *df_get_key_settings(df_t * d, unsigned char keyno, unsigned char *setting, unsigned char *keynos);
 // Change to new (AES) key
-const char *df_change_key (df_t * d, unsigned char keyno, unsigned char version, unsigned char old[16], unsigned char key[16]);
+const char *df_change_key(df_t * d, unsigned char keyno, unsigned char version, unsigned char old[16], unsigned char key[16]);
 // Change settings on current key
-const char *df_change_key_settings (df_t * d, unsigned char settings);
+const char *df_change_key_settings(df_t * d, unsigned char settings);
 // Change card settings config
-const char *df_set_configuration (df_t * d, unsigned char settings);
+const char *df_set_configuration(df_t * d, unsigned char settings);
 // Get application IDs
-const char *df_get_application_ids (df_t * d, unsigned int *num, unsigned int space, unsigned char *aids);
+const char *df_get_application_ids(df_t * d, unsigned int *num, unsigned int space, unsigned char *aids);
 // Create application
-const char *df_create_application (df_t * d, unsigned char aid[3], unsigned char settings, unsigned char keys);
+const char *df_create_application(df_t * d, unsigned char aid[3], unsigned char settings, unsigned char keys);
 // Delete application
-const char *df_delete_application (df_t * d, unsigned char aid[3]);
+const char *df_delete_application(df_t * d, unsigned char aid[3]);
 // Get real UID
-const char *df_get_uid (df_t * d, unsigned char uid[7]);
+const char *df_get_uid(df_t * d, unsigned char uid[7]);
 
 // Create files
-const char *df_get_file_ids (df_t * d, unsigned long long *ids);        // File IDs 0-63 as bits
+const char *df_get_file_ids(df_t * d, unsigned long long *ids); // File IDs 0-63 as bits
 
 // Change existing file settings
-const char *df_change_file_settings (df_t * d, unsigned char fileno, unsigned char comms, unsigned short oldaccess,
-                                     unsigned short access);
+const char *df_change_file_settings(df_t * d, unsigned char fileno, unsigned char comms, unsigned short oldaccess, unsigned short access);
 
 // File types are character D=Data, B=Backup, V=Value, C=Cyclic, L=Linear
-const char *df_get_file_settings (df_t * d, unsigned char fileno, char *type, unsigned char *comms,
-                                  unsigned short *access, unsigned int *size, unsigned int *min, unsigned int *max,
-                                  unsigned int *recs, unsigned int *limited, unsigned char *lc);
-const char *df_create_file (df_t * d, unsigned char fileno, char type, unsigned char comms, unsigned short access,
-                            unsigned int size, unsigned int min, unsigned int max, unsigned int recs,
-                            unsigned int value, unsigned char lc);
+const char *df_get_file_settings(df_t * d, unsigned char fileno, char *type, unsigned char *comms, unsigned short *access, unsigned int *size, unsigned int *min, unsigned int *max, unsigned int *recs, unsigned int *limited, unsigned char *lc);
+const char *df_create_file(df_t * d, unsigned char fileno, char type, unsigned char comms, unsigned short access, unsigned int size, unsigned int min, unsigned int max, unsigned int recs, unsigned int value, unsigned char lc);
 
 // Delete a file
-const char *df_delete_file (df_t * d, unsigned char fileno);
+const char *df_delete_file(df_t * d, unsigned char fileno);
 
 // Access files
-const char *df_write_data (df_t * d, unsigned char fileno, char type, unsigned char comms,
-                           unsigned int offset, unsigned int len, const void *data);
-const char *df_read_data (df_t * d, unsigned char fileno, unsigned char comms, unsigned int offset, unsigned int len,
-                          unsigned char *data);
-const char *df_read_records (df_t * d, unsigned char fileno, unsigned char comms, unsigned int record,
-                             unsigned int recs, unsigned int rsize, unsigned char *data);
-const char *df_get_value (df_t * d, unsigned char fileno, unsigned char comms, unsigned int *value);
+const char *df_write_data(df_t * d, unsigned char fileno, char type, unsigned char comms, unsigned int offset, unsigned int len, const void *data);
+const char *df_read_data(df_t * d, unsigned char fileno, unsigned char comms, unsigned int offset, unsigned int len, unsigned char *data);
+const char *df_read_records(df_t * d, unsigned char fileno, unsigned char comms, unsigned int record, unsigned int recs, unsigned int rsize, unsigned char *data);
+const char *df_get_value(df_t * d, unsigned char fileno, unsigned char comms, unsigned int *value);
 
 // Commit
-const char *df_commit (df_t *);
+const char *df_commit(df_t *);
 // Abort
-const char *df_abort (df_t *);
+const char *df_abort(df_t *);
 
 // Credit/Debit
-const char *df_credit (df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta);
-const char *df_limited_credit (df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta);
-const char *df_debit (df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta);
+const char *df_credit(df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta);
+const char *df_limited_credit(df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta);
+const char *df_debit(df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta);
 
-unsigned int df_crc (unsigned int len, const unsigned char *data);
+unsigned int df_crc(unsigned int len, const unsigned char *data);
 
 #endif

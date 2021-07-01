@@ -615,12 +615,14 @@ const char *df_authenticate(df_t * d, unsigned char keyno, unsigned char key[16]
        );
 }
 
-#ifndef	ESP_PLATFORM
 const char *df_des_authenticate(df_t * d, unsigned char keyno, unsigned char key[8])
 {                               // Authenticate with DES - used to convert card to AES
+#ifdef	ESP_PLATFORM
+   return "DES not on ESP platform";
+#else
    return df_authenticate_general(d, keyno, 8, key, EVP_des_cbc());
-}
 #endif
+}
 
 const char *df_change_file_settings(df_t * d, unsigned char fileno, unsigned char comms, unsigned short oldaccess, unsigned short access)
 {                               // Change settings for current key
@@ -686,49 +688,48 @@ const char *df_change_key(df_t * d, unsigned char keyno, unsigned char version, 
    return NULL;
 }
 
-const char *df_format(df_t * d, unsigned char key[16])
-{                               // Format card, and set AES master key all zeros with key version 01. key is existing master AES key
-	// Format change to leave key
+const char *df_format(df_t * d, unsigned char version, unsigned char key[16])
+{                               // Format card
+   // Card can be brand new with zero DES key - changed to AES
+   // Card can have zero AES key
+   // Card can have AES key as provided
+   // End result if success is formatted using AES key as provided (or zero AES key)
    unsigned char zero[16] = {
       0
    };
-   if (!key)
-      key = zero;
-   const char *e;
+   unsigned char *currentkey = NULL;
+   const char *e = "Not formatted";
+   // Get out of existing application / session first
    if ((d->keylen || d->aid[0] || d->aid[1] || d->aid[1]) && (e = df_select_application(d, NULL)))
       return e;
-   unsigned char version;
-   if ((e = df_get_key_version(d, 0, &version)))
-      return e;
-   if (!version)
-   {                            // DES!
-#ifdef	ESP_PLATFORM
-      return "Needs conversion from DES to AES";
-#else
-      // TODO is this needed
-      // TODO should we assume DES key is zero
-      // TODO document DES policy
-      if ((e = df_des_authenticate(d, 0, key)))
-         return e;
-      if ((e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL)))
-         return e;
-      // Auth again as we did not track CMAC so cannot do key change without
-      if ((e = df_des_authenticate(d, 0, key)))
-         return e;
-      if ((e = df_change_key(d, 0x80, 1, NULL, NULL)))
-         return e;
-#endif
-   } else
-   {                            // AES
-      if ((e = df_authenticate(d, 0, key)))
-         return e;
-      if ((e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL)))
-         return e;
-      if (memcmp(key, zero, 16) && (e = df_change_key(d, 0x80, 1, key, NULL)))
-         return e;              // Failed to change key back to zeros
-      return e;
+   // Try supplied key
+   if (e && key)
+      e = df_authenticate(d, 0, currentkey = key);
+   // Try zero AES key
+   if (e && !key)
+      e = df_authenticate(d, 0, currentkey = zero);
+   if (!e)
+      e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL);       // Not DES, format (does not change key)
+   else
+   {                            // If all else fails, try DES with zero key
+      e = df_des_authenticate(d, 0, currentkey = zero);
+      if (!e)
+         e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL);    // Format the card anyway in case DES had stuff
+      if (!e)
+         e = df_change_key(d, 0x80, 0, NULL, NULL);     // Change to AES
    }
-   return NULL;
+   if (!e)
+      e = df_authenticate(d, 0, currentkey);    // Re-auth after format
+   if (!e)
+   {                            // Set key if needed
+      if (!key)
+         key = zero;
+      unsigned char currentversion;
+      e = df_get_key_version(d, 0, &version);
+      if (!e && (currentversion != version || memcpy(currentkey, key, 16)))
+         e = df_change_key(d, 0x80, version, currentkey, key);
+   }
+   return e;
 }
 
 const char *df_commit(df_t * d)
