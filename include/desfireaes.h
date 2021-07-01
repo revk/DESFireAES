@@ -125,7 +125,7 @@ const char *df_authenticate(df_t *, unsigned char keyno, unsigned char key[16]);
 // Get Key Version
 const char *df_get_key_version(df_t * d, unsigned char keyno, unsigned char *version);
 // Get Key settings
-const char *df_get_key_settings(df_t * d, unsigned char keyno, unsigned char *setting, unsigned char *keynos);
+const char *df_get_key_settings(df_t * d, unsigned char *setting, unsigned char *keynos);
 // Change to new (AES) key
 const char *df_change_key(df_t * d, unsigned char keyno, unsigned char version, unsigned char old[16], unsigned char key[16]);
 // Change settings on current key

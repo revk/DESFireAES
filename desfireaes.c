@@ -483,12 +483,11 @@ const char *df_get_version(df_t * d, unsigned char ver[28])
    return NULL;
 }
 
-const char *df_get_key_settings(df_t * d, unsigned char keyno, unsigned char *setting, unsigned char *keynos)
+const char *df_get_key_settings(df_t * d, unsigned char *setting, unsigned char *keynos)
 {
    unsigned int rlen;
    unsigned char buf[17];
    unsigned int n = 1;
-   wbuf1(keyno);
    const char *e = df_dx(d, 0x45, sizeof(buf), buf, n, 0, 0, &rlen);
    if (e)
       return e;
