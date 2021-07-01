@@ -731,7 +731,7 @@ const char *df_format(df_t * d, unsigned char version, unsigned char key[16])
       if (!e && (currentversion != version || memcpy(currentkey, key, 16)))
          e = df_change_key(d, 0x80, version, currentkey, key);
       if (!e)
-         e = df_authenticate(d, 0, currentkey); // Re-auth after format or change key
+         e = df_authenticate(d, 0, key); // Re-auth after format or change key
    }
    return e;
 }
