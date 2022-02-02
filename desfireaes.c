@@ -35,7 +35,6 @@
 
 #include "desfireaes.h"
 
-// TODO Kconfig
 //#define DEBUG ESP_LOG_INFO
 //#define DEBUG_CMAC
 
