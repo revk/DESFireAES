@@ -26,7 +26,7 @@
 #include <termios.h>
 #include "desfireaes.h"
 #include "pn532.h"
-#inlcide <ajl.h>
+#include <ajl.h>
 
 int             debug = 0;      /* debug */
 int             red = 33,
