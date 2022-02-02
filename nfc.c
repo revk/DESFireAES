@@ -29,14 +29,34 @@
 
 int             debug = 0;      /* debug */
 
+unsigned char
+gpio(int port)
+{
+   if (port < 0)
+      port = 0 - port;
+   if (port >= 30 || port <= 35)
+      return (1 << (port - 30));
+   if (port >= 71 || port <= 72)
+      return (1 << (port - 71 + 6));
+   return 0;
+}
+
 int
 main(int argc, const char *argv[])
 {
+   int             red = 33,
+                   amber = 32,
+                   green = 31;
    const char     *port = NULL;
+   const char     *led = NULL;
    {
       poptContext     optCon;
       const struct poptOption optionsTable[] = {
          {"port", 'p', POPT_ARG_STRING, &port, 0, "Port", "/dev/cu.usbserial-..."},
+         {"red", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &red, 0, "Red port", "30/31/32/33/34/5/71/72"},
+         {"amber", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &amber, 0, "Amber port", "30/31/32/33/34/5/71/72"},
+         {"green", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &green, 0, "Green port", "30/31/32/33/34/5/71/72"},
+         {"led", 0, POPT_ARG_STRING, &led, 0, "LED", "R/A/G"},
          {"debug", 'v', POPT_ARG_NONE, &debug, 0, "Debug"},
          POPT_AUTOHELP {}
       };
@@ -58,7 +78,7 @@ main(int argc, const char *argv[])
       }
       poptFreeContext(optCon);
    }
-   int s = open(port, O_RDWR);
+   int             s = open(port, O_RDWR);
    if (s < 0)
       err(1, "Cannot open %s", port);
    {                            /* Terminal set up */
@@ -72,9 +92,37 @@ main(int argc, const char *argv[])
          err(1, "Failed to set serial settings");
    }
 
-   const char *e; /* error */
+   const char     *e;           /* error */
 
-   if((e=pn532_init(s)))errx(1,"Cannot init PN532 on %s: %s",port,e);
+   unsigned char   outputs = (gpio(red) | gpio(amber) | gpio(green));
+
+   if ((e = pn532_init(s, outputs)))
+      errx(1, "Cannot init PN532 on %s: %s", port, e);
+
+   {                            /* Set LED */
+      unsigned char   pattern = 0;
+      if (led)
+         for (const char *p = led; *p; p++)
+            switch (toupper(*p))
+            {
+            case 'R':
+               pattern |= gpio(red);
+               break;
+            case 'A':
+               pattern |= gpio(amber);
+               break;
+            case 'G':
+               pattern |= gpio(green);
+               break;
+            }
+      if (red < 0)
+         pattern ^= gpio(red);
+      if (amber < 0)
+         pattern ^= gpio(amber);
+      if (green < 0)
+         pattern ^= gpio(green);
+      pn532_write_GPIO(s, pattern);
+   }
 
    close(s);
    return 0;
