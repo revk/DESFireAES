@@ -14,3 +14,9 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+
+
+const char *pn532_init(int s)
+{
+	return "Not coded";
+}
