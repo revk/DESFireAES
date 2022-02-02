@@ -14,6 +14,9 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/select.h>
+#include <string.h>
+#include <alloca.h>
+#include "pn532.h"
 
 /* #define DEBUGLOW */
 /* #define DEBUG */
@@ -269,7 +272,7 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
          l = len;
       if (l)
       {
-         if (uart_rx(s, data1, l, 10) < l)
+         if (uart_rx(s, data1, l, 20) < l)
          {
 #ifdef DEBUG
             fprintf(stderr, " Timeout\n");
@@ -292,7 +295,7 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
          l = len;
       if (l)
       {
-         if (uart_rx(s, data2, l, 10) < l)
+         if (uart_rx(s, data2, l, 20) < l)
          {
 #ifdef DEBUG
             fprintf(stderr, " Timeout\n");
@@ -473,4 +476,61 @@ pn532_dx(void *pv, unsigned int len, unsigned char *data, unsigned int max, cons
    } else
       l--;                      /* Allow for status */
    return l;
+}
+
+int 
+pn532_Cards(int s, unsigned char nfcid[MAXNFCID], unsigned char ats[MAXATS])
+{                               /* -ve for error, else number of cards */
+   unsigned char   buf[100];
+   /* InListPassiveTarget to get card count and baseID */
+   buf[0] = 2;
+   //2 tags(we only report 1)
+      buf[1] = 0;
+   //106 kbps type A(ISO / IEC14443 Type A)
+      int             l = pn532_tx(s, 0x4A, 2, buf, 0, NULL);
+   if (l < 0)
+      return l;
+   l = pn532_rx(s, 0, NULL, sizeof(buf), buf, 110);
+   if (l < 0)
+      return l;
+   if (!ats)
+      ats = alloca(MAXATS);
+   if (!nfcid)
+      nfcid = alloca(MAXNFCID);
+   memset(nfcid, 0, MAXNFCID);
+   memset(ats, 0, MAXATS);
+   /* Extract first card ID */
+   unsigned char  *b = buf,
+                  *e = buf + l; /* end */
+   if (b >= e)
+      return -1;
+   unsigned char   cards = *b++;
+   if (cards)
+   {                            /* Get details of first card */
+      if (b + 5 > e)
+         return -1;
+      unsigned char   tg = *b++;
+      unsigned char   sens_res = (b[0] << 8) + b[1];
+      b += 2;
+      unsigned char   sel_res = *b++;
+      if (b + *b + 1 > e)
+         return -1;
+      if (*b < MAXNFCID)
+         memcpy(nfcid, b, *b + 1);      /* OK */
+      else
+         memset(nfcid, 0, MAXNFCID);    /* Too big */
+      b += *b + 1;
+      if (b < e)
+      {                         /* ATS */
+         if (!*b || b + *b > e)
+            return -1;
+         if (*b <= MAXATS)
+         {
+            memcpy(ats, b, *b); /* OK */
+            (ats)--;            /* Make len of what follows for consistency */
+         }
+         b += *b;               /* ready for second target (which we are not looking at) */
+      }
+   }
+   return cards;
 }

@@ -28,6 +28,9 @@
 #include "pn532.h"
 
 int             debug = 0;      /* debug */
+int             red = 33,
+                amber = 32,
+                green = 31;
 
 unsigned char
 gpio(int port)
@@ -41,12 +44,36 @@ gpio(int port)
    return 0;
 }
 
+void
+setled(int s, const char *led)
+{                               /* Set LED */
+   unsigned char   pattern = 0;
+   if (led)
+      for (const char *p = led; *p; p++)
+         switch (toupper(*p))
+         {
+         case 'R':
+            pattern |= gpio(red);
+            break;
+         case 'A':
+            pattern |= gpio(amber);
+            break;
+         case 'G':
+            pattern |= gpio(green);
+            break;
+         }
+   if (red < 0)
+      pattern ^= gpio(red);
+   if (amber < 0)
+      pattern ^= gpio(amber);
+   if (green < 0)
+      pattern ^= gpio(green);
+   pn532_write_GPIO(s, pattern);
+}
+
 int
 main(int argc, const char *argv[])
 {
-   int             red = 33,
-                   amber = 32,
-                   green = 31;
    const char     *port = NULL;
    const char     *led = NULL;
    {
@@ -99,30 +126,27 @@ main(int argc, const char *argv[])
    if ((e = pn532_init(s, outputs)))
       errx(1, "Cannot init PN532 on %s: %s", port, e);
 
-   {                            /* Set LED */
-      unsigned char   pattern = 0;
-      if (led)
-         for (const char *p = led; *p; p++)
-            switch (toupper(*p))
-            {
-            case 'R':
-               pattern |= gpio(red);
-               break;
-            case 'A':
-               pattern |= gpio(amber);
-               break;
-            case 'G':
-               pattern |= gpio(green);
-               break;
-            }
-      if (red < 0)
-         pattern ^= gpio(red);
-      if (amber < 0)
-         pattern ^= gpio(amber);
-      if (green < 0)
-         pattern ^= gpio(green);
-      pn532_write_GPIO(s, pattern);
+   setled(s, led);
+
+   /* Wait for card */
+   unsigned char   nfcid[MAXNFCID] = {};
+   unsigned char   ats[MAXATS] = {};
+   int             cards = 0;
+   while (!cards)
+   {
+      cards = pn532_Cards(s, nfcid, ats);
+      if (cards < 0)
+         errx(1, "Failed to get cards");
    }
+   /* TODO printing card ID for now, ideally needs to be part of getting card info, maybe even in JSON */
+   printf("ATS  ");
+   for (int i = 0; i < *ats; i++)
+      printf("%02X", ats[1 + i]);
+   printf("\n");
+   printf("Card ");
+   for (int i = 0; i < *nfcid; i++)
+      printf("%02X", nfcid[1 + i]);
+   printf("\n");
 
    close(s);
    return 0;
