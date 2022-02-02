@@ -113,7 +113,7 @@ static const char *decrypt(EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int 
 
 // Encrypt, updating iv
 #ifdef	ESP_PLATFORM
-#define encrypt(ctx,cipher,keylen,key,iv,out,in,len) aes_encrypt(keylen,key,iv,out,in,len)
+#define doencrypt(ctx,cipher,keylen,key,iv,out,in,len) aes_encrypt(keylen,key,iv,out,in,len)
 static const char *aes_encrypt(int keylen, const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
 {
    if (len <= 0)
@@ -140,7 +140,7 @@ static const char *aes_encrypt(int keylen, const unsigned char *key, unsigned ch
    return NULL;
 }
 #else
-static const char *encrypt(EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
+static const char *doencrypt(EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
 {
    len = (len + keylen - 1) / keylen * keylen;
    if (EVP_EncryptInit_ex(ctx, cipher, NULL, key, iv) != 1)
@@ -216,9 +216,9 @@ static void cmac(df_t * d, unsigned int len, unsigned char *data)
       for (p = 0; p < d->keylen; p++)
          temp[p] ^= d->sk1[p];
    if (last)
-      encrypt(d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, NULL, data, last);
+      doencrypt(d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, NULL, data, last);
    if (last < len)
-      encrypt(d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, NULL, temp, len - last);
+      doencrypt(d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, NULL, temp, len - last);
 #ifdef DEBUG_CMAC
    dump("CMAC", d->keylen, d->cmac);
 #endif
@@ -294,7 +294,7 @@ const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *
          while ((len - txenc) % d->keylen)
             buf[len++] = 0;
          dump("Pre enc", len, buf);
-         encrypt(d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, buf + txenc, buf + txenc, len - txenc);
+         doencrypt(d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, buf + txenc, buf + txenc, len - txenc);
          dump("Tx(enc)", len, buf);
       } else
          cmac(d, len, buf);     // CMAC update
@@ -548,7 +548,7 @@ const char *df_authenticate_general(df_t * d, unsigned char keyno, unsigned char
    memcpy(buf + keylen + 1, d->sk2 + 1, keylen - 1);
    buf[keylen * 2] = d->sk2[0];
    // Encrypt response
-   encrypt(d->ctx, cipher, keylen, key, d->cmac, buf + 1, buf + 1, keylen * 2);
+   doencrypt(d->ctx, cipher, keylen, key, d->cmac, buf + 1, buf + 1, keylen * 2);
    // Send response
    if ((e = df_dx(d, 0xAF, sizeof(buf), buf, 1 + keylen * 2, 0, 0, &rlen)))
       return e;
@@ -577,7 +577,7 @@ const char *df_authenticate_general(df_t * d, unsigned char keyno, unsigned char
    // Make SK1
    memset(d->cmac, 0, keylen);
    memset(d->sk1, 0, keylen);
-   if ((e = encrypt(d->ctx, cipher, keylen, d->sk0, d->cmac, d->sk1, d->sk1, keylen)))
+   if ((e = doencrypt(d->ctx, cipher, keylen, d->sk0, d->cmac, d->sk1, d->sk1, keylen)))
       return e;
    // Shift SK1
    unsigned char xor = 0;

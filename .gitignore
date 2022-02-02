@@ -1,3 +1,5 @@
 *.o
 *~
 *.swp
+nfc
+.DS_Store
