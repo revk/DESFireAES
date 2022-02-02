@@ -120,6 +120,9 @@ main(int argc, const char *argv[])
          err(1, "Failed to set serial settings");
    }
 
+j_t j=j_create();
+
+
    const char     *e;           /* error */
 
    unsigned char   outputs = (gpio(red) | gpio(amber) | gpio(green));
@@ -139,28 +142,20 @@ main(int argc, const char *argv[])
       if (cards < 0)
          errx(1, "Failed to get cards");
    }
-   /* TODO printing card ID for now, ideally needs to be part of getting card info, maybe even in JSON */
-   printf("ATS  ");
-   for (int i = 0; i < *ats; i++)
-      printf("%02X", ats[1 + i]);
-   printf("\n");
-   printf("Card ");
-   for (int i = 0; i < *nfcid; i++)
-      printf("%02X", nfcid[1 + i]);
-   printf("\n");
-
+   if(*nfcid)j_store_string(j,"id",j_base16a(*nfcid,nfcid+1));
+   if(*ats)j_store_string(j,"ats",j_base16a(*ats,ats+1));
    df_t            df;
    if ((e = df_init(&df, &s, &pn532_dx)))
       errx(1, "Failed DF init: %s", e);
 
    unsigned char   ver[28];
    if (!(e = df_get_version(&df, ver)))
-   {
-      printf("Ver  ");
-      for (int i = 0; i < sizeof(ver); i++)
-         printf("%02X", ver[i]);
-      printf("\n");
-   }
+	   j_store_string(j,"ver",j_base16a(sizeof(ver),ver));
+
+
+
    close(s);
+   j_err(j_write_pretty(j,stdout));
+   j_delete(&j);
    return 0;
 }
