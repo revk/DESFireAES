@@ -148,6 +148,18 @@ main(int argc, const char *argv[])
       printf("%02X", nfcid[1 + i]);
    printf("\n");
 
+   df_t            df;
+   if ((e = df_init(&df, &s, &pn532_dx)))
+      errx(1, "Failed DF init: %s", e);
+
+   unsigned char   ver[28];
+   if (!(e = df_get_version(&df, ver)))
+   {
+      printf("Ver  ");
+      for (int i = 0; i < sizeof(ver); i++)
+         printf("%02X", ver[i]);
+      printf("\n");
+   }
    close(s);
    return 0;
 }

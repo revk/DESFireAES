@@ -19,7 +19,7 @@
 #include "pn532.h"
 
 /* #define DEBUGLOW */
-/* #define DEBUG */
+extern int      debug;
 
 static int
 pn532_get(int s, unsigned int us)
@@ -122,77 +122,69 @@ pn532_tx(int s, unsigned char cmd, int len1, unsigned char *data1, int len2, uns
       sum += data1[l];
    for (l = 0; l < len2; l++)
       sum += data2[l];
-#ifdef DEBUG
-   fprintf(stderr, "Tx");
-   for (int i = 0; i < b - buf; i++)
-      fprintf(stderr, " %02X", buf[i]);
-#endif
+   if (debug)
+   {
+      fprintf(stderr, "Tx");
+      for (int i = 0; i < b - buf - 6; i++)
+         fprintf(stderr, " %02X", buf[i + 6]);
+   }
    /* Send data */
    uart_tx(s, buf, b - buf);
    if (len1)
    {
-#ifdef DEBUG
-      for (int i = 0; i < len1; i++)
-         fprintf(stderr, " %02X", data1[i]);
-#endif
+      if (debug)
+         for (int i = 0; i < len1; i++)
+            fprintf(stderr, " %02X", data1[i]);
       uart_tx(s, data1, len1);
    }
    if (len2)
    {
-#ifdef DEBUG
-      for (int i = 0; i < len2; i++)
-         fprintf(stderr, " %02X", data2[i]);
-#endif
+      if (debug)
+         for (int i = 0; i < len2; i++)
+            fprintf(stderr, " %02X", data2[i]);
       uart_tx(s, data2, len2);
    }
    buf[0] = -sum;               /* Checksum */
    buf[1] = 0x00;               /* Postamble */
-#ifdef DEBUG
-   for (int i = 0; i < 2; i++)
-      fprintf(stderr, " %02X", buf[i]);
-#endif
+   if (debug)
+      for (int i = 0; i < 2; i++)
+         fprintf(stderr, " %02X", buf[i]);
    uart_tx(s, buf, 2);
    /* Get ACK and check it */
    l = uart_preamble(s, 20);
    if (l < 2)
    {
-#ifdef DEBUG
-      fprintf(stderr, " Preamble timeout\n");
-#endif
+      if (debug)
+         fprintf(stderr, " Preamble timeout\n");
       return -1;
    }
    l = uart_rx(s, buf, 3, 5);
    if (l < 3)
    {
-#ifdef DEBUG
-      fprintf(stderr, " ACK timeout\n");
-#endif
+      if (debug)
+         fprintf(stderr, " ACK timeout\n");
       return -1;
    }
    if (buf[2])
    {
-#ifdef DEBUG
-      fprintf(stderr, " Bad ACK\n");
-#endif
+      if (debug)
+         fprintf(stderr, " Bad ACK\n");
       return -1;
    }
    if (buf[0] == 0xFF && !buf[1])
    {
-#ifdef DEBUG
-      fprintf(stderr, " NAK\n");
-#endif
+      if (debug)
+         fprintf(stderr, " NAK\n");
       return -1;
    }
    if (buf[0] || buf[1] != 0xFF)
    {
-#ifdef DEBUG
-      fprintf(stderr, " Bad ACK/n");
-#endif
+      if (debug)
+         fprintf(stderr, " Bad ACK/n");
       return -1;
    }
-#ifdef DEBUG
-   fprintf(stderr, "\n");
-#endif
+   if (debug)
+      fprintf(stderr, "\n");
    return len1 + len2;
 }
 
@@ -202,23 +194,22 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
    int             l = uart_preamble(s, ms);
    if (l < 2)
    {
-#ifdef DEBUG
-      fprintf(stderr, "Rx premable timeout\n");
-#endif
+      if (debug)
+         fprintf(stderr, "Rx premable timeout\n");
       return -1;
    }
    unsigned char   buf[9];
    l = uart_rx(s, buf, 4, 5);
-#ifdef DEBUG
-   fprintf(stderr, "Rx");
-   for (int i = 0; i < l; i++)
-      fprintf(stderr, " %02X", buf[i]);
-#endif
+   if (debug)
+   {
+      fprintf(stderr, "Rx");
+      for (int i = 0; i < l; i++)
+         fprintf(stderr, " %02X", buf[i]);
+   }
    if (l < 4)
    {
-#ifdef DEBUG
-      fprintf(stderr, " header timeout\n");
-#endif
+      if (debug)
+         fprintf(stderr, " header timeout\n");
       return -1;
    }
    unsigned char   cmd;
@@ -226,18 +217,31 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
    if (buf[0] == 0xFF && buf[1] == 0xFF)
    {                            /* Extended */
       l = uart_rx(s, buf + 4, 3, 10);
-#ifdef DEBUG
-      fprintf(stderr, "Rx");
-      for (int i = 0; i < l; i++)
-         fprintf(stderr, " %02X", buf[4 + i]);
-#endif
+      if (debug)
+      {
+         fprintf(stderr, "Rx");
+         for (int i = 0; i < l; i++)
+            fprintf(stderr, " %02X", buf[4 + i]);
+      }
       if (l < 3)
+      {
+         if (debug)
+            printf(" Short header\n");
          return -1;
+      }
       if ((unsigned char)(buf[2] + buf[3] + buf[4]))
+      {
+         if (debug)
+            printf(" Bad header\n");
          return -1;
+      }
       len = (buf[2] << 8) + buf[3];
       if (buf[5] != 0xD5)
+      {
+         if (debug)
+            printf(" Not expected response\n");
          return -1;
+      }
       cmd = buf[6];
    } else
    {                            /* Normal */
@@ -245,14 +249,17 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
          return -1;
       len = buf[0];
       if (buf[2] != 0xD5)
+      {
+         if (debug)
+            printf(" Not expected response\n");
          return -1;
+      }
       cmd = buf[3];
    }
    if (len < 2)
    {
-#ifdef DEBUG
-      fprintf(stderr, "Rx Bad len %d\n", len);
-#endif
+      if (debug)
+         fprintf(stderr, "Rx Bad len %d\n", len);
       return -1;
    }
    len -= 2;
@@ -260,9 +267,8 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
    unsigned char   sum = 0xD5 + cmd;
    if (len > max1 + max2)
    {
-#ifdef DEBUG
-      fprintf(stderr, "Rx Over len %d>%d\n", len, max1 + max2);
-#endif
+      if (debug)
+         fprintf(stderr, "Rx Over len %d>%d\n", len, max1 + max2);
       return -1;
    }
    if (data1)
@@ -274,15 +280,13 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
       {
          if (uart_rx(s, data1, l, 20) < l)
          {
-#ifdef DEBUG
-            fprintf(stderr, " Timeout\n");
-#endif
+            if (debug)
+               fprintf(stderr, " Timeout\n");
             return -1;
          }
-#ifdef DEBUG
-         for (int i = 0; i < l; i++)
-            fprintf(stderr, " %02X", data1[i]);
-#endif
+         if (debug)
+            for (int i = 0; i < l; i++)
+               fprintf(stderr, " %02X", data1[i]);
          len -= l;
          while (l)
             sum += data1[--l];
@@ -297,15 +301,13 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
       {
          if (uart_rx(s, data2, l, 20) < l)
          {
-#ifdef DEBUG
-            fprintf(stderr, " Timeout\n");
-#endif
+            if (debug)
+               fprintf(stderr, " Timeout\n");
             return -1;
          }
-#ifdef DEBUG
-         for (int i = 0; i < l; i++)
-            fprintf(stderr, " %02X", data2[i]);
-#endif
+         if (debug)
+            for (int i = 0; i < l; i++)
+               fprintf(stderr, " %02X", data2[i]);
          len -= l;
          while (l)
             sum += data2[--l];
@@ -314,32 +316,27 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
    l = uart_rx(s, buf, 2, 10);
    if (l < 2)
    {
-#ifdef DEBUG
-      fprintf(stderr, " Timeout\n");
-#endif
+      if (debug)
+         fprintf(stderr, " Timeout\n");
       return -1;
    }
-#ifdef DEBUG
-   for (int i = 0; i < l; i++)
-      fprintf(stderr, " %02X", buf[i]);
-#endif
+   if (debug)
+      for (int i = 0; i < l; i++)
+         fprintf(stderr, " %02X", buf[i]);
    if ((unsigned char)(buf[0] + sum))
    {
-#ifdef DEBUG
-      fprintf(stderr, " Bad checksum\n");
-#endif
+      if (debug)
+         fprintf(stderr, " Bad checksum\n");
       return -1;
    }
    if (buf[1])
    {
-#ifdef DEBUG
-      fprintf(stderr, " Bad postamble\n");
-#endif
+      if (debug)
+         fprintf(stderr, " Bad postamble\n");
       return -1;
    }
-#ifdef DEBUG
-   fprintf(stderr, "\n");
-#endif
+   if (debug)
+      fprintf(stderr, "\n");
    return res;
 }
 
@@ -478,7 +475,7 @@ pn532_dx(void *pv, unsigned int len, unsigned char *data, unsigned int max, cons
    return l;
 }
 
-int 
+int
 pn532_Cards(int s, unsigned char nfcid[MAXNFCID], unsigned char ats[MAXATS])
 {                               /* -ve for error, else number of cards */
    unsigned char   buf[100];
