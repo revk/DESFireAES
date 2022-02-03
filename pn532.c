@@ -21,26 +21,28 @@
 #include "desfireaes.h"
 
 /* #define DEBUGLOW */
-extern int debug;
+extern int      debug;
 
-static int pn532_get(int s, unsigned int us)
+static int
+pn532_get(int s, unsigned int us)
 {
-   fd_set r;
+   fd_set          r;
    FD_ZERO(&r);
    FD_SET(s, &r);
-   struct timeval t = { 0, us };
+   struct timeval  t = {0, us};
    if (select(s + 1, &r, NULL, NULL, &t) < 1)
       return -1;
-   unsigned char b = 0;
+   unsigned char   b = 0;
    if (read(s, &b, 1) != 1)
       return -1;
    return b;
 }
 
-static int uart_rx(int s, unsigned char *buf, int len, int ms)
+static int
+uart_rx(int s, unsigned char *buf, int len, int ms)
 {
-   int l = 0,
-       v;
+   int             l = 0,
+                   v;
    while (l < len && (v = pn532_get(s, ms * 1000)) >= 0)
       buf[l++] = v;
    if (s < 0)
@@ -54,12 +56,14 @@ static int uart_rx(int s, unsigned char *buf, int len, int ms)
    return l;
 }
 
-static void pn532_put(int s, unsigned char b)
+static void
+pn532_put(int s, unsigned char b)
 {
    write(s, &b, 1);
 }
 
-static void uart_tx(int s, unsigned char *buf, int len)
+static void
+uart_tx(int s, unsigned char *buf, int len)
 {
    for (int l = 0; l < len; l++)
       pn532_put(s, buf[l]);
@@ -72,13 +76,14 @@ static void uart_tx(int s, unsigned char *buf, int len)
    usleep(len * 1000000 / 115200 / 10);
 }
 
-static int uart_preamble(int s, int ms)
+static int
+uart_preamble(int s, int ms)
 {                               /* Wait for preamble */
-   unsigned char last = 0xFF;
+   unsigned char   last = 0xFF;
    while (1)
    {
-      unsigned char c;
-      int l = uart_rx(s, &c, 1, ms);
+      unsigned char   c;
+      int             l = uart_rx(s, &c, 1, ms);
       if (l < 1)
          return l;
       if (last == 0x00 && c == 0xFF)
@@ -88,17 +93,20 @@ static int uart_preamble(int s, int ms)
 }
 
 /* Low level access functions */
-static int pn532_tx(int s, unsigned char cmd, int len1, unsigned char *data1, int len2, unsigned char *data2, const char *name)
+static int
+pn532_tx(int s, unsigned char cmd, int len1, unsigned char *data1, int len2, unsigned char *data2, const char *name)
 {                               /* Send data to PN532 */
-   unsigned char buf[20],
-   *b = buf;
+   if (debug)
+      fprintf(stderr, "[32m");
+   unsigned char   buf[20],
+                  *b = buf;
    *b++ = 0x55;
    *b++ = 0x55;
    *b++ = 0x55;
    *b++ = 0x00;                 /* Preamble */
    *b++ = 0x00;                 /* Start 1 */
    *b++ = 0xFF;                 /* Start 2 */
-   int l = len1 + len2 + 2;
+   int             l = len1 + len2 + 2;
    if (l >= 0x100)
    {
       *b++ = 0xFF;              /* Extended len */
@@ -113,16 +121,17 @@ static int pn532_tx(int s, unsigned char cmd, int len1, unsigned char *data1, in
    }
    *b++ = 0xD4;                 /* Direction (host to PN532) */
    *b++ = cmd;
-   unsigned char sum = 0xD4 + cmd;
+   unsigned char   sum = 0xD4 + cmd;
    for (l = 0; l < len1; l++)
       sum += data1[l];
    for (l = 0; l < len2; l++)
       sum += data2[l];
    if (debug)
    {
-      fprintf(stderr, "Tx");
+      fprintf(stderr, "Tx[3m");
       for (int i = 0; i < b - buf - 6; i++)
          fprintf(stderr, " %02X", buf[i + 6]);
+      fprintf(stderr, "[0;1;32m");
    }
    /* Send data */
    uart_tx(s, buf, b - buf);
@@ -143,8 +152,12 @@ static int pn532_tx(int s, unsigned char cmd, int len1, unsigned char *data1, in
    buf[0] = -sum;               /* Checksum */
    buf[1] = 0x00;               /* Postamble */
    if (debug)
+   {
+      fprintf(stderr, "[0;32;3m");
       for (int i = 0; i < 2; i++)
          fprintf(stderr, " %02X", buf[i]);
+      fprintf(stderr, "[0;32m");
+   }
    uart_tx(s, buf, 2);
    if (debug && name)
       fprintf(stderr, " %s", name);
@@ -153,119 +166,123 @@ static int pn532_tx(int s, unsigned char cmd, int len1, unsigned char *data1, in
    if (l < 2)
    {
       if (debug)
-         fprintf(stderr, " Preamble timeout\n");
+         fprintf(stderr, " [31mPreamble timeout[0m\n");
       return -1;
    }
    l = uart_rx(s, buf, 3, 5);
    if (l < 3)
    {
       if (debug)
-         fprintf(stderr, " ACK timeout\n");
+         fprintf(stderr, " [31mACK timeout[0m\n");
       return -1;
    }
    if (buf[2])
    {
       if (debug)
-         fprintf(stderr, " Bad ACK\n");
+         fprintf(stderr, " [31mBad ACK[0m\n");
       return -1;
    }
    if (buf[0] == 0xFF && !buf[1])
    {
       if (debug)
-         fprintf(stderr, " NAK\n");
+         fprintf(stderr, " [31mNAK[0m\n");
       return -1;
    }
    if (buf[0] || buf[1] != 0xFF)
    {
       if (debug)
-         fprintf(stderr, " Bad ACK/n");
+         fprintf(stderr, " [31mBad ACK[0m\n");
       return -1;
    }
    if (debug)
-      fprintf(stderr, "\n");
+      fprintf(stderr, "[0m\n");
    return len1 + len2;
 }
 
-int pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, int ms)
+int
+pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, int ms)
 {                               /* Recv data from PN532 */
-   int l = uart_preamble(s, ms);
+   if (debug)
+      fprintf(stderr, "[33m");
+   int             l = uart_preamble(s, ms);
    if (l < 2)
    {
       if (debug)
-         fprintf(stderr, "Rx premable timeout\n");
+         fprintf(stderr, "Rx [31mpremable timeout[0m\n");
       return -1;
    }
-   unsigned char buf[9];
+   unsigned char   buf[9];
    l = uart_rx(s, buf, 4, 20);
    if (debug)
    {
-      fprintf(stderr, "Rx");
+      fprintf(stderr, "Rx[3m");
       for (int i = 0; i < l; i++)
          fprintf(stderr, " %02X", buf[i]);
    }
    if (l < 4)
    {
       if (debug)
-         fprintf(stderr, " header timeout\n");
+         fprintf(stderr, " [31mheader timeout[0m\n");
       return -1;
    }
-   unsigned char cmd;
-   int len = 0;
+   unsigned char   cmd;
+   int             len = 0;
    if (buf[0] == 0xFF && buf[1] == 0xFF)
    {                            /* Extended */
       l = uart_rx(s, buf + 4, 3, 10);
       if (debug)
       {
-         fprintf(stderr, "Rx");
          for (int i = 0; i < l; i++)
             fprintf(stderr, " %02X", buf[4 + i]);
       }
       if (l < 3)
       {
          if (debug)
-            printf(" Short header\n");
+            printf(" [31mShort header[0m\n");
          return -1;
       }
-      if ((unsigned char) (buf[2] + buf[3] + buf[4]))
+      if ((unsigned char)(buf[2] + buf[3] + buf[4]))
       {
          if (debug)
-            printf(" Bad header\n");
+            printf(" [31mBad header[0m\n");
          return -1;
       }
       len = (buf[2] << 8) + buf[3];
       if (buf[5] != 0xD5)
       {
          if (debug)
-            printf(" Not expected response\n");
+            printf(" [31mNot expected response[0m\n");
          return -1;
       }
       cmd = buf[6];
    } else
    {                            /* Normal */
-      if ((unsigned char) (buf[0] + buf[1]))
+      if ((unsigned char)(buf[0] + buf[1]))
          return -1;
       len = buf[0];
       if (buf[2] != 0xD5)
       {
          if (debug)
-            printf(" Not expected response\n");
+            printf(" [31mNot expected response[0m\n");
          return -1;
       }
       cmd = buf[3];
    }
+   if (debug)
+      fprintf(stderr, "[0;1;33m");
    if (len < 2)
    {
       if (debug)
-         fprintf(stderr, "Rx Bad len %d\n", len);
+         fprintf(stderr, " [31mBad len %d[0m\n", len);
       return -1;
    }
    len -= 2;
-   int res = len;
-   unsigned char sum = 0xD5 + cmd;
+   int             res = len;
+   unsigned char   sum = 0xD5 + cmd;
    if (len > max1 + max2)
    {
       if (debug)
-         fprintf(stderr, "Rx Over len %d>%d\n", len, max1 + max2);
+         fprintf(stderr, " [31mOver len %d>%d[0m\n", len, max1 + max2);
       return -1;
    }
    if (data1)
@@ -278,7 +295,7 @@ int pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *dat
          if (uart_rx(s, data1, l, 20) < l)
          {
             if (debug)
-               fprintf(stderr, " Timeout\n");
+               fprintf(stderr, " [31mTimeout[0m\n");
             return -1;
          }
          if (debug)
@@ -300,7 +317,7 @@ int pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *dat
          if (uart_rx(s, data2, l, 20) < l)
          {
             if (debug)
-               fprintf(stderr, " Timeout\n");
+               fprintf(stderr, " [31mTimeout[0m\n");
             return -1;
          }
          if (debug)
@@ -316,44 +333,45 @@ int pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *dat
    if (l < 2)
    {
       if (debug)
-         fprintf(stderr, " Timeout\n");
+         fprintf(stderr, " [31mTimeout[0m\n");
       return -1;
    }
    if (debug)
    {
+      fprintf(stderr, "[0;33;3m");
       for (int i = 0; i < l; i++)
          fprintf(stderr, " %02X", buf[i]);
-      if (cmd == 0x41)
-      {
-         if (max1 > 1)
-            fprintf(stderr, " %s", df_err(data1[1]));
-         else if (max1 + max2 > 1)
-            fprintf(stderr, " %s", df_err(data2[1 - max1]));
-         else
-            fprintf(stderr, " %s", df_err(buf[1 - max1 - max2]));
-      }
+      fprintf(stderr, "[0;33m");
    }
-   if ((unsigned char) (buf[0] + sum))
+   if ((unsigned char)(buf[0] + sum))
    {
       if (debug)
-         fprintf(stderr, " Bad checksum\n");
+         fprintf(stderr, " [31mBad checksum[0m\n");
       return -1;
    }
    if (buf[1])
    {
       if (debug)
-         fprintf(stderr, " Bad postamble\n");
+         fprintf(stderr, " [31mBad postamble[0m\n");
       return -1;
    }
+   if (debug && cmd == 0x41 && res > 1)
+   {
+      if (max1 > 1)
+         fprintf(stderr, " %s", df_err(data1[1]));
+      else if (max1 + max2 > 1)
+         fprintf(stderr, " %s", df_err(data2[1 - max1]));
+   }
    if (debug)
-      fprintf(stderr, "\n");
+      fprintf(stderr, "[0m\n");
    return res;
 }
 
-const char *pn532_init(int s, unsigned char outputs)
+const char     *
+pn532_init(int s, unsigned char outputs)
 {
    /* init */
-   unsigned char buf[30] = { };
+   unsigned char   buf[30] = {};
    buf[sizeof(buf) - 1] = 0x55;
    buf[sizeof(buf) - 2] = 0x55;
    buf[sizeof(buf) - 3] = 0x55;
@@ -361,7 +379,7 @@ const char *pn532_init(int s, unsigned char outputs)
    /* Set up PN532 (SAM first as in vLowBat mode) */
    while (pn532_get(s, 10000) >= 0);    /* clear all rx buffer */
    /* SAMConfiguration */
-   int n = 0;
+   int             n = 0;
    buf[n++] = 0x01;             /* Normal */
    buf[n++] = 20;               /* *50ms timeout */
    buf[n++] = 0x00;             /* Not use IRQ */
@@ -427,10 +445,11 @@ const char *pn532_init(int s, unsigned char outputs)
    return NULL;
 }
 
-int pn532_read_GPIO(int s)
+int
+pn532_read_GPIO(int s)
 {                               /* Read P3/P7 (P72/P71 in top bits, P35-30 in rest) */
-   unsigned char buf[3];
-   int l = pn532_tx(s, 0x0C, 0, NULL, 0, NULL, "Read GPIO");
+   unsigned char   buf[3];
+   int             l = pn532_tx(s, 0x0C, 0, NULL, 0, NULL, "Read GPIO");
    if (l >= 0)
       l = pn532_rx(s, 0, NULL, sizeof(buf), buf, 50);
    if (l < 0)
@@ -440,12 +459,13 @@ int pn532_read_GPIO(int s)
    return (buf[0] & 0x3F) | ((buf[1] & 0x06) << 5);
 }
 
-int pn532_write_GPIO(int s, unsigned char value)
+int
+pn532_write_GPIO(int s, unsigned char value)
 {                               /* Write P3/P7 (P72/P71 in top bits, P35-30 in rest) */
-   unsigned char buf[2];
+   unsigned char   buf[2];
    buf[0] = 0x80 | (value & 0x3F);
    buf[1] = 0x80 | ((value >> 5) & 0x06);
-   int l = pn532_tx(s, 0x0E, 2, buf, 0, NULL, "Write GPIO");
+   int             l = pn532_tx(s, 0x0E, 2, buf, 0, NULL, "Write GPIO");
    if (l >= 0)
       l = pn532_rx(s, 0, NULL, sizeof(buf), buf, 50);
    return l;
@@ -453,17 +473,18 @@ int pn532_write_GPIO(int s, unsigned char value)
 
 
 /* Data exchange(for DESFire use) */
-int pn532_dx(void *pv, unsigned int len, unsigned char *data, unsigned int max, const char **strerr)
+int
+pn532_dx(void *pv, unsigned int len, unsigned char *data, unsigned int max, const char **strerr)
 {                               /* Card access function - sends to card starting CMD byte, and receives reply in to same buffer,
                                  * starting status byte, returns len */
    if (!pv)
       return -1;
-   int s = *((int *) pv);
-   unsigned char tg = 1;
-   int l = pn532_tx(s, 0x40, 1, &tg, len, data, *strerr);
+   int             s = *((int *)pv);
+   unsigned char   tg = 1;
+   int             l = pn532_tx(s, 0x40, 1, &tg, len, data, *strerr);
    if (l >= 0)
    {
-      unsigned char status;
+      unsigned char   status;
       l = pn532_rx(s, 1, &status, max, data, 500);
       if (!l)
          l = -1;
@@ -479,15 +500,16 @@ int pn532_dx(void *pv, unsigned int len, unsigned char *data, unsigned int max, 
    return l;
 }
 
-int pn532_Cards(int s, unsigned char nfcid[MAXNFCID], unsigned char ats[MAXATS])
+int
+pn532_Cards(int s, unsigned char nfcid[MAXNFCID], unsigned char ats[MAXATS])
 {                               /* -ve for error, else number of cards */
-   unsigned char buf[100];
+   unsigned char   buf[100];
    /* InListPassiveTarget to get card count and baseID */
    buf[0] = 2;
    //2 tags(we only report 1)
-   buf[1] = 0;
+      buf[1] = 0;
    //106 kbps type A(ISO / IEC14443 Type A)
-   int l = pn532_tx(s, 0x4A, 2, buf, 0, NULL, "InListPassiveTarget");
+      int             l = pn532_tx(s, 0x4A, 2, buf, 0, NULL, "InListPassiveTarget");
    if (l < 0)
       return l;
    l = pn532_rx(s, 0, NULL, sizeof(buf), buf, 110);
@@ -500,19 +522,19 @@ int pn532_Cards(int s, unsigned char nfcid[MAXNFCID], unsigned char ats[MAXATS])
    memset(nfcid, 0, MAXNFCID);
    memset(ats, 0, MAXATS);
    /* Extract first card ID */
-   unsigned char *b = buf,
-       *e = buf + l;            /* end */
+   unsigned char  *b = buf,
+                  *e = buf + l; /* end */
    if (b >= e)
       return -1;
-   unsigned char cards = *b++;
+   unsigned char   cards = *b++;
    if (cards)
    {                            /* Get details of first card */
       if (b + 5 > e)
          return -1;
-      unsigned char tg = *b++;
-      unsigned char sens_res = (b[0] << 8) + b[1];
+      unsigned char   tg = *b++;
+      unsigned char   sens_res = (b[0] << 8) + b[1];
       b += 2;
-      unsigned char sel_res = *b++;
+      unsigned char   sel_res = *b++;
       if (b + *b + 1 > e)
          return -1;
       if (*b < MAXNFCID)
