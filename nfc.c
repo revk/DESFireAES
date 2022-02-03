@@ -347,8 +347,8 @@ main(int argc, const char *argv[])
             unsigned char   lc;
             df(get_file_settings, i, &type, &comms, &access, &size, &min, &max, &recs, &limited, &lc);
             j_store_stringf(f, "type", "%c", type);
-            j_store_int(f, "comms", comms);     /* TODO nicer way to show and set this? */
-            j_store_int(f, "access", access);   /* TODO nicer way to show and set this? */
+            j_store_int(f, "comms", comms);
+            j_store_stringf(f, "access", "%04X", access);
             if (size)
                j_store_int(f, "size", size);
             if (type == 'V')
