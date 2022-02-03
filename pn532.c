@@ -292,7 +292,7 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
          l = len;
       if (l)
       {
-         if (uart_rx(s, data1, l, 20) < l)
+         if (uart_rx(s, data1, l, 50) < l)
          {
             if (debug)
                fprintf(stderr, " [31mTimeout[0m\n");
@@ -314,7 +314,7 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
          l = len;
       if (l)
       {
-         if (uart_rx(s, data2, l, 20) < l)
+         if (uart_rx(s, data2, l, 50) < l)
          {
             if (debug)
                fprintf(stderr, " [31mTimeout[0m\n");
@@ -329,7 +329,7 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
       }
    } else
       max2 = 0;
-   l = uart_rx(s, buf, 2, 10);
+   l = uart_rx(s, buf, 2, 50);
    if (l < 2)
    {
       if (debug)

@@ -130,6 +130,8 @@ main(int argc, const char *argv[])
    const char     *aidkey0 = NULL;
    const char     *aidkey1 = NULL;
    int             format = 0;
+   int             listaids = 0;
+   int             listfiles = 0;
    int             createaid = 0;
    int             setmaster = 0;
    int             aidkeys = 2;
@@ -145,7 +147,9 @@ main(int argc, const char *argv[])
          {"aid", 0, POPT_ARG_STRING, &aid, 0, "AID", "Application ID"},
          {"aidkey0", 0, POPT_ARG_STRING, &aidkey0, 0, "Application key 0", "Key ver and AES"},
          {"aidkey1", 0, POPT_ARG_STRING, &aidkey1, 0, "Application key 1", "Key ver and AES"},
+         {"list-files", 0, POPT_ARG_NONE, &listfiles, 0, "List files"},
          {"format", 0, POPT_ARG_NONE, &format, 0, "Format card"},
+         {"list-aids", 0, POPT_ARG_NONE, &listaids, 0, "List AIDs"},
          {"create-aid", 0, POPT_ARG_NONE, &createaid, 0, "Create AID"},
          {"set-master", 0, POPT_ARG_NONE, &setmaster, 0, "Set a master key"},
          {"master-setting", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &mastersetting, 0, "Master key setting", "N"},
@@ -246,6 +250,8 @@ main(int argc, const char *argv[])
    df(select_application, NULL);
    unsigned char   v;
    df(get_key_version, 0, &v);
+   if (aid)
+      j_store_string(j, "aid", j_base16a(3, binaid));
 
    if (!binmaster || *binmaster != v || df_authenticate(&d, 0, binmaster + 1))
    {
@@ -301,10 +307,59 @@ main(int argc, const char *argv[])
          j_store_boolean(j, "aidkey1", j_base16a(17, binaidkey1));
       }
       df(authenticate, 0, binaidkey0 + 1);
-      j_store_boolean(j, "aid", j_base16a(3, binaid));
    }
-   /* TODO listing AIDs */
-   /* TODO listing files in aid */
+   if (listaids)
+   {
+      unsigned char   aids[50 * 3];
+      int             num = 0;
+      df(get_application_ids, &num, sizeof(aids), aids);
+      j_t             a = j_store_array(j, "aids");
+      for (int i = 0; i < num; i++)
+         j_append_string(a, j_base16a(3, aids + 3 * i));
+   }
+   if (listfiles)
+   {
+      if (!binaid)
+         errx(1, "Set --aid");
+      df(select_application, binaid);
+      unsigned long long ids;
+      df(get_file_ids, &ids);
+      j_t             a = j_store_array(j, "files");
+      for (int i = 0; i < 64; i++)
+         if (ids & (1ULL << i))
+         {
+            j_t             f = j_append_object(a);
+            j_store_stringf(f, "id", "%02X", i);
+            char            type;
+            unsigned char   comms;
+            unsigned short  access;
+            unsigned int    size;
+            unsigned int    min;
+            unsigned int    max;
+            unsigned int    recs;
+            unsigned int    limited;
+            unsigned char   lc;
+            df(get_file_settings, i, &type, &comms, &access, &size, &min, &max, &recs, &limited, &lc);
+            j_store_stringf(f, "type", "%c", type);
+            j_store_stringf(f, "comms", "%02X", comms);
+            j_store_stringf(f, "access", "%02X", access);
+            if (size)
+               j_store_int(f, "size", size);
+            if (recs)
+               j_store_int(f, "records", recs);
+            if (type == 'V')
+            {
+               if (min)
+                  j_store_int(f, "min", min);
+               if (max < 0x7FFFFFFF)
+                  j_store_int(f, "max", max);
+               if (limited)
+                  j_store_int(f, "limited", limited);
+               if (lc)
+                  j_store_int(f, "lc", lc);
+            }
+         }
+   }
    /* TODO creating file */
    /* TODO write file */
    /* TODO delete file */
