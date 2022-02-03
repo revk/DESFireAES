@@ -72,6 +72,25 @@ setled(int s, const char *led)
    pn532_write_GPIO(s, pattern);
 }
 
+int             s = -1;
+j_t             j = NULL;
+const char     *ledfail = "R";
+void
+bye(void)
+{
+   if (j)
+   {
+      j_err(j_write_pretty(j, stdout));
+      j_delete(&j);
+   }
+   fflush(stdout);
+   if (s >= 0)
+   {
+      setled(s, ledfail);
+      close(s);
+   }
+}
+
 unsigned char  *
 expecthex(const char *hex, int len, const char *name, const char *explain)
 {
@@ -103,6 +122,9 @@ main(int argc, const char *argv[])
 {
    const char     *port = NULL;
    const char     *led = NULL;
+   const char     *ledwait = "A";
+   const char     *ledfound = "AG";
+   const char     *leddone = "G";
    const char     *master = NULL;
    const char     *aid = NULL;
    const char     *aidkey0 = NULL;
@@ -114,6 +136,7 @@ main(int argc, const char *argv[])
    int             aidsetting = 0xEB;
    int             mastersetting = 0x09;
    int             masterconfig = 0;
+   int             waiting = 10;
    {
       poptContext     optCon;
       const struct poptOption optionsTable[] = {
@@ -132,7 +155,12 @@ main(int argc, const char *argv[])
          {"red", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &red, 0, "Red port", "30/31/32/33/34/5/71/72"},
          {"amber", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &amber, 0, "Amber port", "30/31/32/33/34/5/71/72"},
          {"green", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &green, 0, "Green port", "30/31/32/33/34/5/71/72"},
+         {"waiting", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &waiting, 0, "How long to wait", "seconds"},
          {"led", 0, POPT_ARG_STRING, &led, 0, "LED", "R/A/G"},
+         {"led-wait", 0, POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &ledwait, 0, "LED waiting for card", "R/A/G"},
+         {"led-found", 0, POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &ledfound, 0, "LED when card found and working", "R/A/G"},
+         {"led-done", 0, POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &leddone, 0, "LED for done OK", "R/A/G"},
+         {"led-fail", 0, POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &ledwait, 0, "LED for failed", "R/A/G"},
          {"debug", 'v', POPT_ARG_NONE, &debug, 0, "Debug"},
          POPT_AUTOHELP {}
       };
@@ -158,7 +186,7 @@ main(int argc, const char *argv[])
    hex(aid, 3, "Application ID");
    hex(aidkey0, 17, "Key version and 16 byte AES key data");
    hex(aidkey1, 17, "Key version and 16 byte AES key data");
-   int             s = open(port, O_RDWR);
+   s = open(port, O_RDWR);
    if (s < 0)
       err(1, "Cannot open %s", port);
    {                            /* Terminal set up */
@@ -172,13 +200,9 @@ main(int argc, const char *argv[])
          err(1, "Failed to set serial");
    }
 
-   j_t             j = j_create();
-
-
    const char     *e;           /* error */
 
    unsigned char   outputs = (gpio(red) | gpio(amber) | gpio(green));
-
    if ((e = pn532_init(s, outputs)))
       errx(1, "Cannot init PN532 on %s: %s", port, e);
 
@@ -188,12 +212,20 @@ main(int argc, const char *argv[])
    unsigned char   nfcid[MAXNFCID] = {};
    unsigned char   ats[MAXATS] = {};
    int             cards = 0;
-   while (!cards)
+   setled(s, ledwait);
+   time_t          giveup = time(0) + waiting;
+   while (!cards && time(0) < giveup)
    {
       cards = pn532_Cards(s, nfcid, ats);
       if (cards < 0)
          errx(1, "Failed to get cards");
    }
+   if (!cards)
+      errx(1, "Given up");
+   setled(s, ledfound);
+
+   j = j_create();
+   atexit(&bye);
    if (*nfcid)
       j_store_string(j, "id", j_base16a(*nfcid, nfcid + 1));
    if (*ats)
@@ -221,64 +253,68 @@ main(int argc, const char *argv[])
       df_authenticate(&d, 0, NULL);     /* try default */
    }
    if (!df_isauth(&d))
-      warnx("Authentication failed, no further actions can be performed");
-   else
-   {
+      errx(1, "Authentication failed, no further actions can be performed");
 
-      {                         /* Get UID */
-         unsigned char   uid[7];
-         df(get_uid, uid);
-         j_store_string(j, "uid", j_base16a(sizeof(uid), uid));
-      }
-      if (format)
-      {
-         df(format, *currentkey, currentkey + 1);
-         if (binmaster && !setmaster)
-         {
-            df(change_key, 0x80, 0, currentkey + 1, NULL);      /* clear master key */
-            currentkey = binzero;
-            df(authenticate, 0, NULL);  /* re-authenticate */
-         }
-         j_store_boolean(j, "formatted", 1);
-      }
-      if (setmaster && currentkey == binzero)
-      {
-         if (!binmaster)
-            fill_random(binmaster = malloc(17), 17);    /* new master */
-         df(change_key, 0x80, *binmaster, currentkey + 1, binmaster + 1);
-         currentkey = binmaster;
-         df(authenticate, 0, binmaster + 1);
-         df(change_key_settings, mastersetting);
-         df(set_configuration, masterconfig);
-         j_store_string(j, "master", j_base16a(17, binmaster));
-
-      }
-      if (createaid)
-      {
-         if (!binaid)
-            errx(1, "Set --aid");
-         df(create_application, binaid, aidsetting, aidkeys);
-         if (!binaidkey0)
-            fill_random(binaidkey0 = malloc(17), 17);   /* new key */
-         if (!binaidkey1)
-            fill_random(binaidkey1 = malloc(17), 17);   /* new key */
-         df(change_key, 0, *binaidkey0, NULL, binaidkey0 + 1);
-         j_store_boolean(j, "aidkey0", j_base16a(17, binaidkey0));
-         if (aidkeys > 1)
-         {
-            df(authenticate, 1, NULL);  /* own key to change it */
-            df(change_key, 1, *binaidkey1, NULL, binaidkey1 + 1);
-            j_store_boolean(j, "aidkey1", j_base16a(17, binaidkey1));
-         }
-         df(authenticate, 0, binaidkey0 + 1);
-         j_store_boolean(j, "aid", j_base16a(3, binaid));
-      }
-      /* TODO creating some files */
-      /* TODO listing AIDs */
-      /* TODO listing files in aid */
+   {                            /* Get UID */
+      unsigned char   uid[7];
+      df(get_uid, uid);
+      j_store_string(j, "uid", j_base16a(sizeof(uid), uid));
    }
+   if (format)
+   {
+      df(format, *currentkey, currentkey + 1);
+      if (binmaster && !setmaster)
+      {
+         df(change_key, 0x80, 0, currentkey + 1, NULL); /* clear master key */
+         currentkey = binzero;
+         df(authenticate, 0, NULL);     /* re-authenticate */
+      }
+      j_store_boolean(j, "formatted", 1);
+   }
+   if (setmaster && currentkey == binzero)
+   {
+      if (!binmaster)
+         fill_random(binmaster = malloc(17), 17);       /* new master */
+      df(change_key, 0x80, *binmaster, currentkey + 1, binmaster + 1);
+      currentkey = binmaster;
+      df(authenticate, 0, binmaster + 1);
+      df(change_key_settings, mastersetting);
+      df(set_configuration, masterconfig);
+      j_store_string(j, "master", j_base16a(17, binmaster));
+
+   }
+   if (createaid)
+   {
+      if (!binaid)
+         errx(1, "Set --aid");
+      df(create_application, binaid, aidsetting, aidkeys);
+      if (!binaidkey0)
+         fill_random(binaidkey0 = malloc(17), 17);      /* new key */
+      if (!binaidkey1)
+         fill_random(binaidkey1 = malloc(17), 17);      /* new key */
+      df(change_key, 0, *binaidkey0, NULL, binaidkey0 + 1);
+      j_store_boolean(j, "aidkey0", j_base16a(17, binaidkey0));
+      if (aidkeys > 1)
+      {
+         df(authenticate, 1, NULL);     /* own key to change it */
+         df(change_key, 1, *binaidkey1, NULL, binaidkey1 + 1);
+         j_store_boolean(j, "aidkey1", j_base16a(17, binaidkey1));
+      }
+      df(authenticate, 0, binaidkey0 + 1);
+      j_store_boolean(j, "aid", j_base16a(3, binaid));
+   }
+   /* TODO listing AIDs */
+   /* TODO listing files in aid */
+   /* TODO creating file */
+   /* TODO write file */
+   /* TODO delete file */
+   {                            /* free mem */
+      unsigned int    mem;
+      df(free_memory, &mem);
+      j_store_int(j, "free-mem", mem);
+   }
+   setled(s, leddone);
    close(s);
-   j_err(j_write_pretty(j, stdout));
-   j_delete(&j);
+   s = -1;
    return 0;
 }

@@ -162,7 +162,7 @@ pn532_tx(int s, unsigned char cmd, int len1, unsigned char *data1, int len2, uns
    if (debug && name)
       fprintf(stderr, " %s", name);
    /* Get ACK and check it */
-   l = uart_preamble(s, 30);
+   l = uart_preamble(s, 50);
    if (l < 2)
    {
       if (debug)
