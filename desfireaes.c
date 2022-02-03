@@ -634,6 +634,11 @@ const char *df_authenticate(df_t * d, unsigned char keyno, const unsigned char k
        );
 }
 
+int df_isauth(df_t *d)
+{ // Is authenticated
+	return d->keylen; // Set when authentication is complete, and cleared for cases that lose it
+}
+
 const char *df_des_authenticate(df_t * d, unsigned char keyno, const unsigned char key[8])
 {                               // Authenticate with DES - used to convert card to AES
 #ifdef	ESP_PLATFORM
