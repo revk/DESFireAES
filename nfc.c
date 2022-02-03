@@ -135,9 +135,10 @@ main(int argc, const char *argv[])
    int             createaid = 0;
    int             setmaster = 0;
    int             aidkeys = 2;
-   int             aidsetting = 0xEB;
-   int             mastersetting = 0x09;
-   int             masterconfig = 0;
+   int             aidsetting = 0xEB;   /* TODO should use Hex for this */
+   int             mastersetting = 0x09;        /* TODO should use Hex for this */
+   int             randomuid = 0;
+   int             disableformat = 0;
    int             waiting = 10;
    {
       poptContext     optCon;
@@ -166,7 +167,8 @@ main(int argc, const char *argv[])
          {"create-aid", 0, POPT_ARG_NONE, &createaid, 0, "Create AID"},
          {"set-master", 0, POPT_ARG_NONE, &setmaster, 0, "Set a master key"},
          {"master-setting", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &mastersetting, 0, "Master key setting", "N"},
-         {"master-config", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &masterconfig, 0, "Master key config", "N"},
+         {"disable-format", 0, POPT_ARG_NONE, &disableformat, 0, "Disable formatting"},
+         {"random-uid", 0, POPT_ARG_NONE, &randomuid, 0, "Use random UID"},
          {"aid-keys", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &aidkeys, 0, "AID keys", "N"},
          {"aid-setting", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &aidsetting, 0, "AID setting", "N"},
          {"red", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &red, 0, "Red port", "30/31/32/33/34/5/71/72"},
@@ -299,10 +301,10 @@ main(int argc, const char *argv[])
       currentkey = binmaster;
       df(authenticate, 0, binmaster + 1);
       df(change_key_settings, mastersetting);
-      df(set_configuration, masterconfig);
       j_store_string(j, "master", j_base16a(17, binmaster));
 
-   }
+   } else if (setmaster || randomuid || disableformat)
+      df(set_configuration, randomuid * 2 + disableformat);
    if (createaid)
    {
       if (!binaid)
@@ -322,6 +324,11 @@ main(int argc, const char *argv[])
          df(change_key, i, *binaidkey[i], NULL, binaidkey[i] + 1);
       }
       df(authenticate, 0, binaidkey[0] + 1);
+   }
+   if (binaid)
+   {
+      /* TODO get key settings, number of keys */
+      /* TODO key versions */
    }
    if (listaids)
    {
