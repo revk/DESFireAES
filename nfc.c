@@ -274,7 +274,8 @@ main(int argc, const char *argv[])
          j_store_boolean(j, "aid", j_base16a(3, binaid));
       }
       /* TODO creating some files */
-
+      /* TODO listing AIDs */
+      /* TODO listing files in aid */
    }
    close(s);
    j_err(j_write_pretty(j, stdout));
