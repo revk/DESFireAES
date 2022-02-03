@@ -252,59 +252,59 @@ static void add_crc(unsigned int len, const unsigned char *src, unsigned char *d
 }
 
 const char *df_err(unsigned char c)
-{// Error code name
-	switch(c)
-	{
-		case 0x00:
-			return "OK";
-case 0x0C:
-         return "No change";
-case 0x0E:
-         return "Out of EEPROM";
-case 0x1C:
-         return "Illegal command";
-case 0x1E:
-         return "Integrity error";
-case 0x40:
-         return "No such file";
-case 0x7E:
-         return "Length error";
-case 0x97:
-         return "Crypto error";
-case 0x9D:
-         return "Permission denied";
-case 0x9E:
-         return "Parameter error";
-case 0xA0:
-         return "Application not found";
-case 0xAE:
-         return "Authentication error";
-case 0xAF:
-	 return "More";
-case 0xBE:
-         return "Boundary error";
-case 0xC1:
-         return "Card integrity error";
-case 0xCA:
-         return "Command aborted";
-case 0xCD:
-         return "Card disabled";
-case 0xCE:
-         return "Count error";
-case 0xDE:
-         return "Duplicate error";
-case 0xEE:
-         return "EEPROM error";
-case 0xF0:
-         return "File not found";
-case 0xF1:
-         return "File integrity found";
-	}
-      return "Rx status error response";
+{                               // Error code name
+   switch (c)
+   {
+   case 0x00:
+      return "OK";
+   case 0x0C:
+      return "No change";
+   case 0x0E:
+      return "Out of EEPROM";
+   case 0x1C:
+      return "Illegal command";
+   case 0x1E:
+      return "Integrity error";
+   case 0x40:
+      return "No such file";
+   case 0x7E:
+      return "Length error";
+   case 0x97:
+      return "Crypto error";
+   case 0x9D:
+      return "Permission denied";
+   case 0x9E:
+      return "Parameter error";
+   case 0xA0:
+      return "Application not found";
+   case 0xAE:
+      return "Authentication error";
+   case 0xAF:
+      return "More";
+   case 0xBE:
+      return "Boundary error";
+   case 0xC1:
+      return "Card integrity error";
+   case 0xCA:
+      return "Command aborted";
+   case 0xCD:
+      return "Card disabled";
+   case 0xCE:
+      return "Count error";
+   case 0xDE:
+      return "Duplicate error";
+   case 0xEE:
+      return "EEPROM error";
+   case 0xF0:
+      return "File not found";
+   case 0xF1:
+      return "File integrity found";
+   }
+   return "Rx status error response";
 }
 
 #define TXMAX 55
-const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsigned int len, unsigned char txenc, unsigned char rxenc, unsigned int *rlen,const char *name)
+const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsigned int len, unsigned char txenc, unsigned char rxenc, unsigned int *rlen, const char *name)
 {                               // Data exchange, see include file for more details
    if (rlen)
       *rlen = 0;                // default
@@ -363,11 +363,11 @@ const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *
          const char *errstr = name;
          int b = d->dx(d->obj, TXMAX, p, 1, &errstr);
          if (b < 0)
-	 {
-	    if (!errstr || errstr == name)
-	       errstr = "Dx fail";
+         {
+            if (!errstr || errstr == name)
+               errstr = "Dx fail";
             return errstr;
-	 }
+         }
          dump("Rx(raw)", b, p);
          if (!b)
          {
@@ -394,11 +394,11 @@ const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *
          const char *errstr = name;
          int b = d->dx(d->obj, len, p, e - p, &errstr);
          if (b < 0)
-	 {
-	    if (!errstr || errstr == name)
-	       errstr = "Dx fail";
+         {
+            if (!errstr || errstr == name)
+               errstr = "Dx fail";
             return errstr;
-	 }
+         }
          dump("Rx(raw)", b, p);
          if (!b)
          {
@@ -419,7 +419,7 @@ const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *
             return "Rx No space";
          len = 1;               // Next part to send
          *p = 0xAF;
-	 name="More";
+         name = "More";
       }
       len = p - buf;
    }
@@ -730,12 +730,12 @@ const char *df_format(df_t * d, unsigned char version, const unsigned char key[1
    if (e)
       e = df_authenticate(d, 0, currentkey = zero);
    if (!e)
-      e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL, "Format");       // Not DES, format (does not change key)
+      e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL, "Format");     // Not DES, format (does not change key)
    else
    {                            // If all else fails, try DES with zero key
       e = df_des_authenticate(d, 0, currentkey = zero);
       if (!e)
-         e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL, "Format");    // Format the card anyway in case DES had stuff
+         e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL, "Format");  // Format the card anyway in case DES had stuff
       if (!e)
          e = df_change_key(d, 0x80, 0, NULL, NULL);     // Change to AES
    }
@@ -750,7 +750,7 @@ const char *df_format(df_t * d, unsigned char version, const unsigned char key[1
       if (!e && (currentversion != version || memcmp(currentkey, key, 16)))
          e = df_change_key(d, 0x80, version, currentkey, key);
       if (!e)
-         e = df_authenticate(d, 0, key); // Re-auth after format or change key
+         e = df_authenticate(d, 0, key);        // Re-auth after format or change key
    }
    return e;
 }
@@ -789,7 +789,7 @@ const char *df_get_application_ids(df_t * d, unsigned int *num, unsigned int spa
 const char *df_delete_application(df_t * d, const unsigned char aid[3])
 {
    unsigned char buf[32] = { 0 };
-   memcpy(buf+1, aid, 3);
+   memcpy(buf + 1, aid, 3);
    return df_dx(d, 0xDA, sizeof(buf), buf, 4, 0, 0, NULL, "Delete Application");
 }
 
@@ -889,12 +889,12 @@ const char *df_create_file(df_t * d, unsigned char fileno, char type, unsigned c
    {                            // Cyclic or linear
       wbuf3(size);
       wbuf3(recs);
-      return df_dx(d, type == 'C' ? 0xC0 : 0xC1, sizeof(buf), buf, n, 0, 0, NULL, type=='C'?"Create Cyclic File":"Create Linear File");
+      return df_dx(d, type == 'C' ? 0xC0 : 0xC1, sizeof(buf), buf, n, 0, 0, NULL, type == 'C' ? "Create Cyclic File" : "Create Linear File");
    }
    if (type == 'D' || type == 'B')
    {                            // Data or backup
       wbuf3(size);
-      return df_dx(d, type == 'D' ? 0xCD : 0xCB, sizeof(buf), buf, n, 0, 0, NULL, type=='D'?"Create Data File":"Create Backup File");
+      return df_dx(d, type == 'D' ? 0xCD : 0xCB, sizeof(buf), buf, n, 0, 0, NULL, type == 'D' ? "Create Data File" : "Create Backup File");
    }
    return "Unknown file type";
 }
