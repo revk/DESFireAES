@@ -240,7 +240,7 @@ main(int argc, const char *argv[])
    df_t            d;
    if ((e = df_init(&d, &s, &pn532_dx)))
       errx(1, "Failed DF init: %s", e);
-#define df(x,...) if((e=df_##x(&d,__VA_ARGS__)))errx(1,"Failed "#x": %s",e);
+#define df(x,...) do{if((e=df_##x(&d,__VA_ARGS__)))errx(1,"Failed "#x": %s",e);}while(0)
 
    unsigned char   binzero[17] = {};
    unsigned char  *currentkey = binmaster ? : binzero;
@@ -326,6 +326,8 @@ main(int argc, const char *argv[])
       df(select_application, binaid);
       if (binaidkey0)
          df(authenticate, 0, binaidkey0 + 1);
+      else if (binaidkey1)
+         df(authenticate, 1, binaidkey1 + 1);
       unsigned long long ids;
       df(get_file_ids, &ids);
       j_t             a = j_store_array(j, "files");
@@ -345,12 +347,10 @@ main(int argc, const char *argv[])
             unsigned char   lc;
             df(get_file_settings, i, &type, &comms, &access, &size, &min, &max, &recs, &limited, &lc);
             j_store_stringf(f, "type", "%c", type);
-            j_store_int(f, "comms", comms);
-            j_store_int(f, "access", access);
+            j_store_int(f, "comms", comms);     /* TODO nicer way to show and set this? */
+            j_store_int(f, "access", access);   /* TODO nicer way to show and set this? */
             if (size)
                j_store_int(f, "size", size);
-            if (recs)
-               j_store_int(f, "records", recs);
             if (type == 'V')
             {
                if (min)
@@ -361,6 +361,15 @@ main(int argc, const char *argv[])
                   j_store_int(f, "limited", limited);
                if (lc)
                   j_store_int(f, "lc", lc);
+               unsigned int    value;
+               if (!df_get_value(&d, i, comms, &value))
+                  j_store_int(f, "value", value);
+            }
+            if (type == 'C')
+            {
+               if (max)
+                  j_store_int(f, "max-records", max);
+               j_store_int(f, "records", recs);
             }
          }
    }
