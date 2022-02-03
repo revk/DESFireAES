@@ -127,8 +127,7 @@ main(int argc, const char *argv[])
    const char     *leddone = "G";
    const char     *master = NULL;
    const char     *aid = NULL;
-   const char     *aidkey0 = NULL;
-   const char     *aidkey1 = NULL;
+   const char     *aidkey[14] = {};
    int             remove = 0;
    int             format = 0;
    int             listaids = 0;
@@ -147,8 +146,20 @@ main(int argc, const char *argv[])
          {"remove", 0, POPT_ARG_NONE, &remove, 0, "Wait for card to be removed"},
          {"master", 0, POPT_ARG_STRING, &master, 0, "Master key", "Key ver and AES"},
          {"aid", 0, POPT_ARG_STRING, &aid, 0, "AID", "Application ID"},
-         {"aidkey0", 0, POPT_ARG_STRING, &aidkey0, 0, "Application key 0", "Key ver and AES"},
-         {"aidkey1", 0, POPT_ARG_STRING, &aidkey1, 0, "Application key 1", "Key ver and AES"},
+         {"aidkey0", 0, POPT_ARG_STRING, &aidkey[0], 0, "Application key 0 (can be set for keys 0...D)", "Key ver and AES"},
+         {"aidkey1", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[1], 0, "Application key 1", "Key ver and AES"},
+         {"aidkey2", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[2], 0, "Application key 2", "Key ver and AES"},
+         {"aidkey3", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[3], 0, "Application key 3", "Key ver and AES"},
+         {"aidkey4", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[4], 0, "Application key 4", "Key ver and AES"},
+         {"aidkey5", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[5], 0, "Application key 5", "Key ver and AES"},
+         {"aidkey6", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[6], 0, "Application key 6", "Key ver and AES"},
+         {"aidkey7", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[7], 0, "Application key 7", "Key ver and AES"},
+         {"aidkey8", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[8], 0, "Application key 8", "Key ver and AES"},
+         {"aidkey9", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[9], 0, "Application key 9", "Key ver and AES"},
+         {"aidkeyA", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[10], 0, "Application key A", "Key ver and AES"},
+         {"aidkeyB", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[11], 0, "Application key B", "Key ver and AES"},
+         {"aidkeyC", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[12], 0, "Application key C", "Key ver and AES"},
+         {"aidkeyD", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[13], 0, "Application key D", "Key ver and AES"},
          {"list-files", 0, POPT_ARG_NONE, &listfiles, 0, "List files"},
          {"format", 0, POPT_ARG_NONE, &format, 0, "Format card"},
          {"list-aids", 0, POPT_ARG_NONE, &listaids, 0, "List AIDs"},
@@ -190,8 +201,9 @@ main(int argc, const char *argv[])
    }
    hex(master, 17, "Key version and 16 byte AES key data");
    hex(aid, 3, "Application ID");
-   hex(aidkey0, 17, "Key version and 16 byte AES key data");
-   hex(aidkey1, 17, "Key version and 16 byte AES key data");
+   unsigned char  *binaidkey[14];
+   for (int i = 0; i < 14; i++)
+      binaidkey[i] = expecthex(aidkey[i], 17, "aidkeyN", "Key version and 16 byte AES key data");
    s = open(port, O_RDWR);
    if (s < 0)
       err(1, "Cannot open %s", port);
@@ -296,19 +308,20 @@ main(int argc, const char *argv[])
       if (!binaid)
          errx(1, "Set --aid");
       df(create_application, binaid, aidsetting, aidkeys);
-      if (!binaidkey0)
-         fill_random(binaidkey0 = malloc(17), 17);      /* new key */
-      if (!binaidkey1)
-         fill_random(binaidkey1 = malloc(17), 17);      /* new key */
-      df(change_key, 0, *binaidkey0, NULL, binaidkey0 + 1);
-      j_store_boolean(j, "aidkey0", j_base16a(17, binaidkey0));
-      if (aidkeys > 1)
+      j_t             k = j_store_array(j, "aid-keys");
+      for (int i = 0; i < aidkeys; i++)
       {
-         df(authenticate, 1, NULL);     /* own key to change it */
-         df(change_key, 1, *binaidkey1, NULL, binaidkey1 + 1);
-         j_store_boolean(j, "aidkey1", j_base16a(17, binaidkey1));
+         if (!binaidkey[i])
+            fill_random(binaidkey[i] = malloc(17), 17); /* new key */
+         j_append_string(k, j_base16a(17, binaidkey[i]));
       }
-      df(authenticate, 0, binaidkey0 + 1);
+      df(change_key, 0, *binaidkey[0], NULL, binaidkey[0] + 1);
+      for (int i = 1; 1 < aidkeys; i++)
+      {
+         df(authenticate, i, NULL);     /* own key to change it */
+         df(change_key, i, *binaidkey[i], NULL, binaidkey[i] + 1);
+      }
+      df(authenticate, 0, binaidkey[0] + 1);
    }
    if (listaids)
    {
@@ -324,10 +337,9 @@ main(int argc, const char *argv[])
       if (!binaid)
          errx(1, "Set --aid");
       df(select_application, binaid);
-      if (binaidkey0)
-         df(authenticate, 0, binaidkey0 + 1);
-      else if (binaidkey1)
-         df(authenticate, 1, binaidkey1 + 1);
+      for (int i = 0; i < 13; i++)
+         if (binaidkey[i] && !df_authenticate(&d, i, binaidkey[i] + 1))
+            break;
       unsigned long long ids;
       df(get_file_ids, &ids);
       j_t             a = j_store_array(j, "files");
