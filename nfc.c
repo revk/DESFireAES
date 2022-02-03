@@ -322,6 +322,8 @@ main(int argc, const char *argv[])
       if (!binaid)
          errx(1, "Set --aid");
       df(select_application, binaid);
+      if (binaidkey0)
+         df(authenticate, 0, binaidkey0 + 1);
       unsigned long long ids;
       df(get_file_ids, &ids);
       j_t             a = j_store_array(j, "files");
@@ -329,7 +331,7 @@ main(int argc, const char *argv[])
          if (ids & (1ULL << i))
          {
             j_t             f = j_append_object(a);
-            j_store_stringf(f, "id", "%02X", i);
+            j_store_int(f, "id", i);
             char            type;
             unsigned char   comms;
             unsigned short  access;
