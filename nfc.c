@@ -129,6 +129,7 @@ main(int argc, const char *argv[])
    const char     *aid = NULL;
    const char     *aidkey0 = NULL;
    const char     *aidkey1 = NULL;
+   int             remove = 0;
    int             format = 0;
    int             listaids = 0;
    int             listfiles = 0;
@@ -143,6 +144,7 @@ main(int argc, const char *argv[])
       poptContext     optCon;
       const struct poptOption optionsTable[] = {
          {"port", 'p', POPT_ARG_STRING, &port, 0, "Port", "/dev/cu.usbserial-..."},
+         {"remove", 0, POPT_ARG_NONE, &remove, 0, "Wait for card to be removed"},
          {"master", 0, POPT_ARG_STRING, &master, 0, "Master key", "Key ver and AES"},
          {"aid", 0, POPT_ARG_STRING, &aid, 0, "AID", "Application ID"},
          {"aidkey0", 0, POPT_ARG_STRING, &aidkey0, 0, "Application key 0", "Key ver and AES"},
@@ -343,8 +345,8 @@ main(int argc, const char *argv[])
             unsigned char   lc;
             df(get_file_settings, i, &type, &comms, &access, &size, &min, &max, &recs, &limited, &lc);
             j_store_stringf(f, "type", "%c", type);
-            j_store_stringf(f, "comms", "%02X", comms);
-            j_store_stringf(f, "access", "%02X", access);
+            j_store_int(f, "comms", comms);
+            j_store_int(f, "access", access);
             if (size)
                j_store_int(f, "size", size);
             if (recs)
@@ -371,6 +373,8 @@ main(int argc, const char *argv[])
       j_store_int(j, "free-mem", mem);
    }
    setled(s, leddone);
+   if (remove)
+      while (pn532_Present(s) > 0);
    close(s);
    s = -1;
    return 0;

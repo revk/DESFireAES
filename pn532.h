@@ -7,3 +7,4 @@ int pn532_dx(void *pv, unsigned int len, unsigned char *data, unsigned int max, 
 #define	MAXNFCID	11
 #define	MAXATS		255
 int pn532_Cards(int s, unsigned char nfcid[MAXNFCID], unsigned char ats[MAXATS]);
+int pn532_Present(int s);

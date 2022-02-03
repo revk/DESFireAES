@@ -556,3 +556,22 @@ pn532_Cards(int s, unsigned char nfcid[MAXNFCID], unsigned char ats[MAXATS])
    }
    return cards;
 }
+
+int 
+pn532_Present(int s)
+{
+   uint8_t         buf[1];
+   {                            /* We have cards, check in field still */
+      buf[0] = 6;               /* Test 6 Attention Request Test or ISO/IEC14443-4 card presence detection */
+      int             l = pn532_tx(s, 0x00, 1, buf, 0, NULL, "Attention Request Test");
+      if (l >= 0)
+         l = pn532_rx(s, 0, NULL, sizeof(buf), buf, 110);
+      if (l < 0)
+         return l;
+      if (l < 1)
+         return -1;
+      if (!*buf)
+         return 1;
+   }
+   return pn532_Cards(s, NULL, NULL);   /* Look for card - older MIFARE need re-doing to see if present still */
+}
