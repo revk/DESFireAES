@@ -72,15 +72,38 @@ setled(int s, const char *led)
    pn532_write_GPIO(s, pattern);
 }
 
+unsigned char  *
+expecthex(const char *hex, int len, const char *name, const char *explain)
+{
+   if (!hex)
+      return NULL;
+   unsigned char  *bin = NULL;
+   int             n = j_base16d(hex, &bin);
+   if (n != len)
+      errx(1, "--%s expects %d hexadecimal byte%s %s", name, len, (len == 1) ? "" : "s", explain ? : "");
+   return bin;
+}
+#define hex(name,len,explain) unsigned char *bin##name=expecthex(name,len,#name,explain)
+
 int
 main(int argc, const char *argv[])
 {
    const char     *port = NULL;
    const char     *led = NULL;
+   const char     *master = NULL;
+   const char     *aid = NULL;
+   const char     *aes0 = NULL;
+   const char     *aes1 = NULL;
+   int format=0;
    {
       poptContext     optCon;
       const struct poptOption optionsTable[] = {
          {"port", 'p', POPT_ARG_STRING, &port, 0, "Port", "/dev/cu.usbserial-..."},
+         {"master", 0, POPT_ARG_STRING, &master, 0, "Master key", "Key ver and AES"},
+         {"aid", 0, POPT_ARG_STRING, &aid, 0, "AID", "Application ID"},
+         {"aes0", 0, POPT_ARG_STRING, &aes0, 0, "Application key 0", "Key ver and AES"},
+         {"aes1", 0, POPT_ARG_STRING, &aes1, 0, "Application key 1", "Key ver and AES"},
+         {"format", 0, POPT_ARG_NONE, &format, 0, "Format card"},
          {"red", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &red, 0, "Red port", "30/31/32/33/34/5/71/72"},
          {"amber", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &amber, 0, "Amber port", "30/31/32/33/34/5/71/72"},
          {"green", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &green, 0, "Green port", "30/31/32/33/34/5/71/72"},
@@ -106,6 +129,10 @@ main(int argc, const char *argv[])
       }
       poptFreeContext(optCon);
    }
+   hex(master, 17, "Key version and 16 byte AES key data");
+   hex(aid, 3, "Application ID");
+   hex(aes0, 17, "Key version and 16 byte AES key data");
+   hex(aes1, 17, "Key version and 16 byte AES key data");
    int             s = open(port, O_RDWR);
    if (s < 0)
       err(1, "Cannot open %s", port);
@@ -120,7 +147,7 @@ main(int argc, const char *argv[])
          err(1, "Failed to set serial settings");
    }
 
-j_t j=j_create();
+   j_t             j = j_create();
 
 
    const char     *e;           /* error */
@@ -142,20 +169,35 @@ j_t j=j_create();
       if (cards < 0)
          errx(1, "Failed to get cards");
    }
-   if(*nfcid)j_store_string(j,"id",j_base16a(*nfcid,nfcid+1));
-   if(*ats)j_store_string(j,"ats",j_base16a(*ats,ats+1));
-   df_t            df;
-   if ((e = df_init(&df, &s, &pn532_dx)))
+   if (*nfcid)
+      j_store_string(j, "id", j_base16a(*nfcid, nfcid + 1));
+   if (*ats)
+      j_store_string(j, "ats", j_base16a(*ats, ats + 1));
+
+   df_t            d;
+   if ((e = df_init(&d, &s, &pn532_dx)))
       errx(1, "Failed DF init: %s", e);
+#define df(x,...) if((e=df_##x(&d,__VA_ARGS__)))errx(1,"Failed "#x": %s",e);
 
    unsigned char   ver[28];
-   if (!(e = df_get_version(&df, ver)))
-	   j_store_string(j,"ver",j_base16a(sizeof(ver),ver));
+   if (!(e = df_get_version(&d, ver)))
+      j_store_string(j, "ver", j_base16a(sizeof(ver), ver));
 
+   df(select_application,NULL);
+   if(!df_authenticate(&d,master?*master:0,master?master+1:NULL))
+   { // Get UID
+	   unsigned char uid[7];
+	   df(get_uid,uid);
+	   j_store_string(j, "uid", j_base16a(sizeof(uid),uid));
+   }
 
+   if(format)
+   {
+	   df(format,master?*master:0,master?master+1:NULL);
+   }
 
    close(s);
-   j_err(j_write_pretty(j,stdout));
+   j_err(j_write_pretty(j, stdout));
    j_delete(&j);
    return 0;
 }

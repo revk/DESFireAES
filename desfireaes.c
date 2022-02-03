@@ -242,7 +242,7 @@ unsigned int df_crc(unsigned int len, const unsigned char *data)
    return crc;
 }
 
-static void add_crc(unsigned int len, unsigned char *src, unsigned char *dst)
+static void add_crc(unsigned int len, const unsigned char *src, unsigned char *dst)
 {
    unsigned int c = df_crc(len, src);
    dst[0] = c;
@@ -251,8 +251,60 @@ static void add_crc(unsigned int len, unsigned char *src, unsigned char *dst)
    dst[3] = c >> 24;
 }
 
+const char *df_err(unsigned char c)
+{// Error code name
+	switch(c)
+	{
+		case 0x00:
+			return "OK";
+case 0x0C:
+         return "No change";
+case 0x0E:
+         return "Out of EEPROM";
+case 0x1C:
+         return "Illegal command";
+case 0x1E:
+         return "Integrity error";
+case 0x40:
+         return "No such file";
+case 0x7E:
+         return "Length error";
+case 0x97:
+         return "Crypto error";
+case 0x9D:
+         return "Permission denied";
+case 0x9E:
+         return "Parameter error";
+case 0xA0:
+         return "Application not found";
+case 0xAE:
+         return "Authentication error";
+case 0xAF:
+	 return "More";
+case 0xBE:
+         return "Boundary error";
+case 0xC1:
+         return "Card integrity error";
+case 0xCA:
+         return "Command aborted";
+case 0xCD:
+         return "Card disabled";
+case 0xCE:
+         return "Count error";
+case 0xDE:
+         return "Duplicate error";
+case 0xEE:
+         return "EEPROM error";
+case 0xF0:
+         return "File not found";
+case 0xF1:
+         return "File integrity found";
+	}
+      return "Rx status error response";
+}
+
 #define TXMAX 55
-const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsigned int len, unsigned char txenc, unsigned char rxenc, unsigned int *rlen)
+const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsigned int len, unsigned char txenc, unsigned char rxenc, unsigned int *rlen,const char *name)
 {                               // Data exchange, see include file for more details
    if (rlen)
       *rlen = 0;                // default
@@ -308,10 +360,14 @@ const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *
          if (p > buf)
             *--p = 0xAF;
          dump("Tx(raw)", TXMAX, p);
-         const char *errstr = NULL;
+         const char *errstr = name;
          int b = d->dx(d->obj, TXMAX, p, 1, &errstr);
          if (b < 0)
-            return errstr ? : "Dx fail";
+	 {
+	    if (!errstr || errstr == name)
+	       errstr = "Dx fail";
+            return errstr;
+	 }
          dump("Rx(raw)", b, p);
          if (!b)
          {
@@ -335,10 +391,14 @@ const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *
       while (p < e)
       {
          dump("Tx(raw)", len, p);
-         const char *errstr = NULL;
+         const char *errstr = name;
          int b = d->dx(d->obj, len, p, e - p, &errstr);
          if (b < 0)
-            return errstr ? : "Dx fail";
+	 {
+	    if (!errstr || errstr == name)
+	       errstr = "Dx fail";
+            return errstr;
+	 }
          dump("Rx(raw)", b, p);
          if (!b)
          {
@@ -359,6 +419,7 @@ const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *
             return "Rx No space";
          len = 1;               // Next part to send
          *p = 0xAF;
+	 name="More";
       }
       len = p - buf;
    }
@@ -396,47 +457,7 @@ const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *
    if (*buf && *buf != 0xAF)
    {
       d->keylen = 0;            // Errors kick us out
-      if (*buf == 0x0C)
-         return "No change";
-      if (*buf == 0x0E)
-         return "Out of EEPROM";
-      if (*buf == 0x1C)
-         return "Illegal command";
-      if (*buf == 0x1E)
-         return "Integrity error";
-      if (*buf == 0x40)
-         return "No such file";
-      if (*buf == 0x7E)
-         return "Length error";
-      if (*buf == 0x97)
-         return "Crypto error";
-      if (*buf == 0x9D)
-         return "Permission denied";
-      if (*buf == 0x9E)
-         return "Parameter error";
-      if (*buf == 0xA0)
-         return "Application not found";
-      if (*buf == 0xAE)
-         return "Authentication error";
-      if (*buf == 0xBE)
-         return "Boundary error";
-      if (*buf == 0xC1)
-         return "Card integrity error";
-      if (*buf == 0xCA)
-         return "Command aborted";
-      if (*buf == 0xCD)
-         return "Card disabled";
-      if (*buf == 0xCE)
-         return "Count error";
-      if (*buf == 0xDE)
-         return "Duplicate error";
-      if (*buf == 0xEE)
-         return "EEPROM error";
-      if (*buf == 0xF0)
-         return "File not found";
-      if (*buf == 0xF1)
-         return "File integrity found";
-      return "Rx status error response";
+      return df_err(*buf);
    }
    dump("Rx", len, buf);
    return NULL;
@@ -454,12 +475,12 @@ const char *df_init(df_t * d, void *obj, df_dx_func_t * dx)
    return NULL;
 }
 
-const char *df_select_application(df_t * d, unsigned char aid[3])
+const char *df_select_application(df_t * d, const unsigned char aid[3])
 {                               // Select an AID (NULL means AID 0)
    unsigned char buf[17] = { };
    if (aid)
       memcpy(buf + 1, aid, 3);
-   const char *e = df_dx(d, 0x5A, sizeof(buf), buf, 4, 0, 0, NULL);
+   const char *e = df_dx(d, 0x5A, sizeof(buf), buf, 4, 0, 0, NULL, "Select Application");
    if (e || !aid)
       memset(d->aid, 0, sizeof(d->aid));
    else
@@ -472,7 +493,7 @@ const char *df_get_version(df_t * d, unsigned char ver[28])
 {
    unsigned char buf[64];
    unsigned int rlen;
-   const char *e = df_dx(d, 0x60, sizeof(buf), buf, 1, 0, 0, &rlen);
+   const char *e = df_dx(d, 0x60, sizeof(buf), buf, 1, 0, 0, &rlen, "Get version");
    if (e)
       return e;
    if (rlen != 29)
@@ -487,7 +508,7 @@ const char *df_get_key_settings(df_t * d, unsigned char *setting, unsigned char 
    unsigned int rlen;
    unsigned char buf[17];
    unsigned int n = 1;
-   const char *e = df_dx(d, 0x45, sizeof(buf), buf, n, 0, 0, &rlen);
+   const char *e = df_dx(d, 0x45, sizeof(buf), buf, n, 0, 0, &rlen, "Get Key Settings");
    if (e)
       return e;
    if (rlen != 3)
@@ -505,7 +526,7 @@ const char *df_get_key_version(df_t * d, unsigned char keyno, unsigned char *ver
    unsigned char buf[17];
    unsigned int n = 1;
    wbuf1(keyno);
-   const char *e = df_dx(d, 0x64, sizeof(buf), buf, n, 0, 0, &rlen);
+   const char *e = df_dx(d, 0x64, sizeof(buf), buf, n, 0, 0, &rlen, "Get Key Version");
    if (e)
       return e;
    if (rlen != 2)
@@ -515,7 +536,7 @@ const char *df_get_key_version(df_t * d, unsigned char keyno, unsigned char *ver
    return e;
 }
 
-const char *df_authenticate_general(df_t * d, unsigned char keyno, unsigned char keylen, unsigned char *key
+const char *df_authenticate_general(df_t * d, unsigned char keyno, unsigned char keylen, const unsigned char *key
 #ifndef	ESP_PLATFORM
                                     , const EVP_CIPHER * cipher
 #endif
@@ -524,8 +545,8 @@ const char *df_authenticate_general(df_t * d, unsigned char keyno, unsigned char
    unsigned char zero[keylen];
    if (!key)
    {
+      memset(zero, 0, keylen);
       key = zero;
-      memset(key, 0, keylen);
    }
    d->keylen = 0;
    d->keyno = keyno;
@@ -534,7 +555,7 @@ const char *df_authenticate_general(df_t * d, unsigned char keyno, unsigned char
    unsigned char buf[64];
    unsigned int n = 1;
    wbuf1(keyno);
-   if ((e = df_dx(d, keylen == 8 ? 0x1A : 0xAA, sizeof(buf), buf, n, 0, 0, &rlen)))
+   if ((e = df_dx(d, keylen == 8 ? 0x1A : 0xAA, sizeof(buf), buf, n, 0, 0, &rlen, "Authenticate")))
       return e;
    if (rlen != keylen + 1)
       return "Bad response length for auth";
@@ -549,7 +570,7 @@ const char *df_authenticate_general(df_t * d, unsigned char keyno, unsigned char
    // Encrypt response
    doencrypt(d->ctx, cipher, keylen, key, d->cmac, buf + 1, buf + 1, keylen * 2);
    // Send response
-   if ((e = df_dx(d, 0xAF, sizeof(buf), buf, 1 + keylen * 2, 0, 0, &rlen)))
+   if ((e = df_dx(d, 0xAF, sizeof(buf), buf, 1 + keylen * 2, 0, 0, &rlen, "Handshake")))
       return e;
    if (rlen != keylen + 1)
       return "Bad response length for auth";
@@ -604,7 +625,7 @@ const char *df_authenticate_general(df_t * d, unsigned char keyno, unsigned char
    return NULL;
 }
 
-const char *df_authenticate(df_t * d, unsigned char keyno, unsigned char key[16])
+const char *df_authenticate(df_t * d, unsigned char keyno, const unsigned char key[16])
 {                               // Authenticate with a key (AES)
    return df_authenticate_general(d, keyno, 16, key
 #ifndef	ESP_PLATFORM
@@ -613,7 +634,7 @@ const char *df_authenticate(df_t * d, unsigned char keyno, unsigned char key[16]
        );
 }
 
-const char *df_des_authenticate(df_t * d, unsigned char keyno, unsigned char key[8])
+const char *df_des_authenticate(df_t * d, unsigned char keyno, const unsigned char key[8])
 {                               // Authenticate with DES - used to convert card to AES
 #ifdef	ESP_PLATFORM
    return "DES not on ESP platform";
@@ -631,7 +652,7 @@ const char *df_change_file_settings(df_t * d, unsigned char fileno, unsigned cha
    wbuf1(fileno);
    wbuf1(comms);
    wbuf2(access);
-   return df_dx(d, 0x5F, sizeof(buf), buf, n, (oldaccess & 15) == 14 ? 0 : 2, 0, NULL);
+   return df_dx(d, 0x5F, sizeof(buf), buf, n, (oldaccess & 15) == 14 ? 0 : 2, 0, NULL, "Change File Settings");
 }
 
 const char *df_change_key_settings(df_t * d, unsigned char settings)
@@ -641,7 +662,7 @@ const char *df_change_key_settings(df_t * d, unsigned char settings)
    unsigned char buf[32];
    unsigned int n = 1;
    wbuf1(settings);
-   return df_dx(d, 0x54, sizeof(buf), buf, n, 1, 0, NULL);
+   return df_dx(d, 0x54, sizeof(buf), buf, n, 1, 0, NULL, "Change Key Settings");
 }
 
 const char *df_set_configuration(df_t * d, unsigned char settings)
@@ -652,10 +673,10 @@ const char *df_set_configuration(df_t * d, unsigned char settings)
    unsigned int n = 1;
    wbuf1(0);
    wbuf1(settings);
-   return df_dx(d, 0x5C, sizeof(buf), buf, n, 2, 0, NULL);
+   return df_dx(d, 0x5C, sizeof(buf), buf, n, 2, 0, NULL, "Set Configuration");
 }
 
-const char *df_change_key(df_t * d, unsigned char keyno, unsigned char version, unsigned char old[16], unsigned char key[16])
+const char *df_change_key(df_t * d, unsigned char keyno, unsigned char version, const unsigned char old[16], const unsigned char key[16])
 {
    const char *e;
    unsigned char zero[16] = { 0 };
@@ -679,14 +700,14 @@ const char *df_change_key(df_t * d, unsigned char keyno, unsigned char version, 
       n = 27;
    } else
       n = 23;
-   if ((e = df_dx(d, buf[0], sizeof(buf), buf, n, 2, 0, NULL)))
+   if ((e = df_dx(d, buf[0], sizeof(buf), buf, n, 2, 0, NULL, "Change Key")))
       return e;
    if (keyno == d->keyno)
       d->keylen = 0;            // No longer secure;
    return NULL;
 }
 
-const char *df_format(df_t * d, unsigned char version, unsigned char key[16])
+const char *df_format(df_t * d, unsigned char version, const unsigned char key[16])
 {                               // Format card
    // Card can be brand new with zero DES key - changed to AES
    // Card can have zero AES key
@@ -696,7 +717,7 @@ const char *df_format(df_t * d, unsigned char version, unsigned char key[16])
    unsigned char zero[16] = {
       0
    };
-   unsigned char *currentkey = NULL;
+   const unsigned char *currentkey = NULL;
    const char *e = NULL;
    // Get out of existing application / session first
    if ((d->keylen || d->aid[0] || d->aid[1] || d->aid[1]) && (e = df_select_application(d, NULL)))
@@ -709,12 +730,12 @@ const char *df_format(df_t * d, unsigned char version, unsigned char key[16])
    if (e)
       e = df_authenticate(d, 0, currentkey = zero);
    if (!e)
-      e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL);       // Not DES, format (does not change key)
+      e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL, "Format");       // Not DES, format (does not change key)
    else
    {                            // If all else fails, try DES with zero key
       e = df_des_authenticate(d, 0, currentkey = zero);
       if (!e)
-         e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL);    // Format the card anyway in case DES had stuff
+         e = df_dx(d, 0xFC, 0, NULL, 1, 0, 0, NULL, "Format");    // Format the card anyway in case DES had stuff
       if (!e)
          e = df_change_key(d, 0x80, 0, NULL, NULL);     // Change to AES
    }
@@ -736,12 +757,12 @@ const char *df_format(df_t * d, unsigned char version, unsigned char key[16])
 
 const char *df_commit(df_t * d)
 {                               // Commit
-   return df_dx(d, 0xC7, 0, NULL, 1, 0, 0, NULL);
+   return df_dx(d, 0xC7, 0, NULL, 1, 0, 0, NULL, "Commit");
 }
 
 const char *df_abort(df_t * d)
 {                               // Abort
-   return df_dx(d, 0xA7, 0, NULL, 1, 0, 0, NULL);
+   return df_dx(d, 0xA7, 0, NULL, 1, 0, 0, NULL, "Abort");
 }
 
 const char *df_get_application_ids(df_t * d, unsigned int *num, unsigned int space, unsigned char *aids)
@@ -750,7 +771,7 @@ const char *df_get_application_ids(df_t * d, unsigned int *num, unsigned int spa
       *num = 0;
    unsigned int rlen;
    unsigned char buf[1000];
-   const char *e = df_dx(d, 0x6A, sizeof(buf), buf, 1, 0, 0, &rlen);
+   const char *e = df_dx(d, 0x6A, sizeof(buf), buf, 1, 0, 0, &rlen, "Get Application");
    if (e)
       return e;
    rlen--;
@@ -765,20 +786,20 @@ const char *df_get_application_ids(df_t * d, unsigned int *num, unsigned int spa
    return NULL;
 }
 
-const char *df_delete_application(df_t * d, unsigned char aid[3])
+const char *df_delete_application(df_t * d, const unsigned char aid[3])
 {
    unsigned char buf[32] = { 0 };
    memcpy(buf+1, aid, 3);
-   return df_dx(d, 0xDA, sizeof(buf), buf, 4, 0, 0, NULL);
+   return df_dx(d, 0xDA, sizeof(buf), buf, 4, 0, 0, NULL, "Delete Application");
 }
 
-const char *df_create_application(df_t * d, unsigned char aid[3], unsigned char settings, unsigned char keys)
+const char *df_create_application(df_t * d, const unsigned char aid[3], unsigned char settings, unsigned char keys)
 {
    unsigned char buf[32];
    memcpy(buf + 1, aid, 3);
    buf[4] = settings;
    buf[5] = (0x80 | keys);      // Always AES
-   return df_dx(d, 0xCA, sizeof(buf), buf, 6, 0, 0, NULL);
+   return df_dx(d, 0xCA, sizeof(buf), buf, 6, 0, 0, NULL, "Create Application");
 }
 
 const char *df_write_data(df_t * d, unsigned char fileno, char type, unsigned char comms, unsigned int offset, unsigned int len, const void *data)
@@ -792,7 +813,7 @@ const char *df_write_data(df_t * d, unsigned char fileno, char type, unsigned ch
    wbuf3(len);
    memcpy(buf + n, data, len);
    n += len;
-   return df_dx(d, type == 'D' || type == 'B' ? 0x3D : 0x3B, sizeof(buf), buf, n, (comms & DF_MODE_ENC) ? 8 : (comms & DF_MODE_CMAC) ? 0xFF : 0, 0, NULL);
+   return df_dx(d, type == 'D' || type == 'B' ? 0x3D : 0x3B, sizeof(buf), buf, n, (comms & DF_MODE_ENC) ? 8 : (comms & DF_MODE_CMAC) ? 0xFF : 0, 0, NULL, "Write Data");
 }
 
 const char *df_delete_file(df_t * d, unsigned char fileno)
@@ -800,7 +821,7 @@ const char *df_delete_file(df_t * d, unsigned char fileno)
    unsigned char buf[32];
    unsigned int n = 1;
    wbuf1(fileno);
-   return df_dx(d, 0xDF, sizeof(buf), buf, n, 0, 0, NULL);
+   return df_dx(d, 0xDF, sizeof(buf), buf, n, 0, 0, NULL, "Delete File");
 }
 
 const char *df_get_uid(df_t * d, unsigned char uid[7])
@@ -808,7 +829,7 @@ const char *df_get_uid(df_t * d, unsigned char uid[7])
    if (!d->keylen)
       return "Not authenticated";
    unsigned char buf[64];
-   const char *e = df_dx(d, 0x51, sizeof(buf), buf, 1, 0, 8, NULL);
+   const char *e = df_dx(d, 0x51, sizeof(buf), buf, 1, 0, 8, NULL, "Get UID");
    if (e)
       return e;
    if (uid)
@@ -821,7 +842,7 @@ const char *df_free_memory(df_t * d, unsigned int *mem)
 {
    unsigned int rlen;
    unsigned char buf[32];
-   const char *e = df_dx(d, 0x6E, sizeof(buf), buf, 1, 0, 0, &rlen);
+   const char *e = df_dx(d, 0x6E, sizeof(buf), buf, 1, 0, 0, &rlen, "Free memory");
    if (e)
       return e;
    if (rlen != 4)
@@ -835,7 +856,7 @@ const char *df_get_file_ids(df_t * d, unsigned long long *ids)
 {
    unsigned int rlen;
    unsigned char buf[128];
-   const char *e = df_dx(d, 0x6F, sizeof(buf), buf, 1, 0, 0, &rlen);
+   const char *e = df_dx(d, 0x6F, sizeof(buf), buf, 1, 0, 0, &rlen, "Get File IDs");
    if (e)
       return e;
    if (!ids)
@@ -862,18 +883,18 @@ const char *df_create_file(df_t * d, unsigned char fileno, char type, unsigned c
       wbuf4(max);
       wbuf4(value);
       wbuf1(lc);
-      return df_dx(d, 0xCC, sizeof(buf), buf, n, 0, 0, NULL);
+      return df_dx(d, 0xCC, sizeof(buf), buf, n, 0, 0, NULL, "Create Value File");
    }
    if (type == 'C' || type == 'L')
    {                            // Cyclic or linear
       wbuf3(size);
       wbuf3(recs);
-      return df_dx(d, type == 'C' ? 0xC0 : 0xC1, sizeof(buf), buf, n, 0, 0, NULL);
+      return df_dx(d, type == 'C' ? 0xC0 : 0xC1, sizeof(buf), buf, n, 0, 0, NULL, type=='C'?"Create Cyclic File":"Create Linear File");
    }
    if (type == 'D' || type == 'B')
    {                            // Data or backup
       wbuf3(size);
-      return df_dx(d, type == 'D' ? 0xCD : 0xCB, sizeof(buf), buf, n, 0, 0, NULL);
+      return df_dx(d, type == 'D' ? 0xCD : 0xCB, sizeof(buf), buf, n, 0, 0, NULL, type=='D'?"Create Data File":"Create Backup File");
    }
    return "Unknown file type";
 }
@@ -902,7 +923,7 @@ const char *df_get_file_settings(df_t * d, unsigned char fileno, char *type, uns
    unsigned char buf[128];
    unsigned int n = 1;
    wbuf1(fileno);
-   const char *e = df_dx(d, 0xF5, sizeof(buf), buf, n, 0, 0, &rlen);
+   const char *e = df_dx(d, 0xF5, sizeof(buf), buf, n, 0, 0, &rlen, "Get File Settings");
    if (e)
       return e;
    if (rlen < 8 || rlen > 18)
@@ -939,7 +960,7 @@ const char *df_read_data(df_t * d, unsigned char fileno, unsigned char comms, un
    wbuf1(fileno);
    wbuf3(offset);
    wbuf3(len);
-   const char *e = df_dx(d, 0xBD, sizeof(buf), buf, n, 0, (comms & DF_MODE_ENC) ? 8 : 0, &rlen);
+   const char *e = df_dx(d, 0xBD, sizeof(buf), buf, n, 0, (comms & DF_MODE_ENC) ? 8 : 0, &rlen, "Read Data");
    if (e)
       return e;
    if (rlen != len + 1)
@@ -957,7 +978,7 @@ const char *df_read_records(df_t * d, unsigned char fileno, unsigned char comms,
    wbuf1(fileno);
    wbuf3(record);
    wbuf3(recs);
-   const char *e = df_dx(d, 0xBB, sizeof(buf), buf, n, 0, (comms & DF_MODE_ENC) ? recs * rsize : 0, &rlen);
+   const char *e = df_dx(d, 0xBB, sizeof(buf), buf, n, 0, (comms & DF_MODE_ENC) ? recs * rsize : 0, &rlen, "Read Records");
    if (e)
       return e;
    if (rlen != recs * rsize + 1)
@@ -973,7 +994,7 @@ const char *df_get_value(df_t * d, unsigned char fileno, unsigned char comms, un
    unsigned char buf[32];
    unsigned int n = 1;
    wbuf1(fileno);
-   const char *e = df_dx(d, 0x6C, sizeof(buf), buf, n, 0, (comms & DF_MODE_ENC) ? 4 : 0, &rlen);
+   const char *e = df_dx(d, 0x6C, sizeof(buf), buf, n, 0, (comms & DF_MODE_ENC) ? 4 : 0, &rlen, "Get Value");
    if (e)
       return e;
    if (rlen != 5)
@@ -989,7 +1010,7 @@ const char *df_credit(df_t * d, unsigned char fileno, unsigned char comms, unsig
    unsigned int n = 1;
    wbuf1(fileno);
    wbuf4(delta);
-   return df_dx(d, 0x0C, sizeof(buf), buf, n, (comms & DF_MODE_CMAC) ? 0xFF : 0, 0, NULL);
+   return df_dx(d, 0x0C, sizeof(buf), buf, n, (comms & DF_MODE_CMAC) ? 0xFF : 0, 0, NULL, "Credit");
 }
 
 const char *df_limited_credit(df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta)
@@ -998,7 +1019,7 @@ const char *df_limited_credit(df_t * d, unsigned char fileno, unsigned char comm
    unsigned int n = 1;
    wbuf1(fileno);
    wbuf4(delta);
-   return df_dx(d, 0x1C, sizeof(buf), buf, n, (comms & DF_MODE_CMAC) ? 0xFF : 0, 0, NULL);
+   return df_dx(d, 0x1C, sizeof(buf), buf, n, (comms & DF_MODE_CMAC) ? 0xFF : 0, 0, NULL, "Limited Credit");
 }
 
 const char *df_debit(df_t * d, unsigned char fileno, unsigned char comms, unsigned int delta)
@@ -1007,5 +1028,5 @@ const char *df_debit(df_t * d, unsigned char fileno, unsigned char comms, unsign
    unsigned int n = 1;
    wbuf1(fileno);
    wbuf4(delta);
-   return df_dx(d, 0xDC, sizeof(buf), buf, n, (comms & DF_MODE_CMAC) ? 0xFF : 0, 0, NULL);
+   return df_dx(d, 0xDC, sizeof(buf), buf, n, (comms & DF_MODE_CMAC) ? 0xFF : 0, 0, NULL, "Debit");
 }

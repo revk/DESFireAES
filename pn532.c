@@ -17,6 +17,8 @@
 #include <string.h>
 #include <alloca.h>
 #include "pn532.h"
+#include <openssl/evp.h>
+#include "desfireaes.h"
 
 /* #define DEBUGLOW */
 extern int      debug;
@@ -92,7 +94,7 @@ uart_preamble(int s, int ms)
 
 /* Low level access functions */
 static int
-pn532_tx(int s, unsigned char cmd, int len1, unsigned char *data1, int len2, unsigned char *data2)
+pn532_tx(int s, unsigned char cmd, int len1, unsigned char *data1, int len2, unsigned char *data2, const char *name)
 {                               /* Send data to PN532 */
    unsigned char   buf[20],
                   *b = buf;
@@ -150,8 +152,10 @@ pn532_tx(int s, unsigned char cmd, int len1, unsigned char *data1, int len2, uns
       for (int i = 0; i < 2; i++)
          fprintf(stderr, " %02X", buf[i]);
    uart_tx(s, buf, 2);
+   if (debug&&name)
+      fprintf(stderr, " %s", name);
    /* Get ACK and check it */
-   l = uart_preamble(s, 20);
+   l = uart_preamble(s, 30);
    if (l < 2)
    {
       if (debug)
@@ -199,7 +203,7 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
       return -1;
    }
    unsigned char   buf[9];
-   l = uart_rx(s, buf, 4, 5);
+   l = uart_rx(s, buf, 4, 20);
    if (debug)
    {
       fprintf(stderr, "Rx");
@@ -291,7 +295,8 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
          while (l)
             sum += data1[--l];
       }
-   }
+   } else
+      max1 = 0;
    if (data2)
    {
       l = max2;
@@ -312,7 +317,8 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
          while (l)
             sum += data2[--l];
       }
-   }
+   } else
+      max2 = 0;
    l = uart_rx(s, buf, 2, 10);
    if (l < 2)
    {
@@ -321,8 +327,19 @@ pn532_rx(int s, int max1, unsigned char *data1, int max2, unsigned char *data2, 
       return -1;
    }
    if (debug)
+   {
       for (int i = 0; i < l; i++)
          fprintf(stderr, " %02X", buf[i]);
+      if (cmd == 0x41)
+      {
+         if (max1>1)
+            fprintf(stderr, " %s",df_err(data1[1]));
+         else if ( max1+max2>1)
+            fprintf(stderr, " %s",df_err(data2[1-max1]));
+         else
+            fprintf(stderr, " %s",df_err(buf[1-max1-max2]));
+      }
+   }
    if ((unsigned char)(buf[0] + sum))
    {
       if (debug)
@@ -356,7 +373,7 @@ pn532_init(int s, unsigned char outputs)
    buf[n++] = 0x01;             /* Normal */
    buf[n++] = 20;               /* *50ms timeout */
    buf[n++] = 0x00;             /* Not use IRQ */
-   if (pn532_tx(s, 0x14, 0, NULL, n, buf) < 0 || pn532_rx(s, 0, NULL, sizeof(buf), buf, 50) < 0)
+   if (pn532_tx(s, 0x14, 0, NULL, n, buf, "SAMConfiguration") < 0 || pn532_rx(s, 0, NULL, sizeof(buf), buf, 50) < 0)
    {                            /* Again */
       uart_rx(s, buf, sizeof(buf), 100);        /* Wait long enough for command response timeout before we try again */
       /* SAMConfiguration */
@@ -364,11 +381,11 @@ pn532_init(int s, unsigned char outputs)
       buf[n++] = 0x01;          /* Normal */
       buf[n++] = 20;            /* *50ms timeout */
       buf[n++] = 0x00;          /* Not use IRQ */
-      if (pn532_tx(s, 0x14, 0, NULL, n, buf) < 0 || pn532_rx(s, 0, NULL, sizeof(buf), buf, 50) < 0)
+      if (pn532_tx(s, 0x14, 0, NULL, n, buf, "SAMConfiguration") < 0 || pn532_rx(s, 0, NULL, sizeof(buf), buf, 50) < 0)
          return "SAMConfiguration fail";
    }
-   //GetFirmwareVersion
-      if (pn532_tx(s, 0x02, 0, NULL, 0, NULL) < 0 || pn532_rx(s, 0, NULL, sizeof(buf), buf, 50) < 0)
+   /* GetFirmwareVersion */
+   if (pn532_tx(s, 0x02, 0, NULL, 0, NULL, "GetFirmwareVersion") < 0 || pn532_rx(s, 0, NULL, sizeof(buf), buf, 50) < 0)
       return "GetFirmwareVersion fail";
    /* RFConfiguration (retries) */
    n = 0;
@@ -376,7 +393,7 @@ pn532_init(int s, unsigned char outputs)
    buf[n++] = 0xFF;             /* MxRtyATR (default = 0xFF) */
    buf[n++] = 0x01;             /* MxRtyPSL (default = 0x01) */
    buf[n++] = 0x01;             /* MxRtyPassiveActivation */
-   if (pn532_tx(s, 0x32, 0, NULL, n, buf) < 0 || pn532_rx(s, 0, NULL, sizeof(buf), buf, 50) < 0)
+   if (pn532_tx(s, 0x32, 0, NULL, n, buf, "RFConfiguration") < 0 || pn532_rx(s, 0, NULL, sizeof(buf), buf, 50) < 0)
       return "RFConfiguration fail";
    /* WriteRegister */
    n = 0;
@@ -399,13 +416,13 @@ pn532_init(int s, unsigned char outputs)
    buf[n++] = 0xFF;             /* P7 */
    buf[n++] = 0xF7;             /* P7 */
    buf[n++] = 0xFF;             /* All high */
-   if (n && (pn532_tx(s, 0x08, 0, NULL, n, buf) < 0 || pn532_rx(s, 0, NULL, sizeof(buf), buf, 50) < 0))
+   if (n && (pn532_tx(s, 0x08, 0, NULL, n, buf, "WriteRegister") < 0 || pn532_rx(s, 0, NULL, sizeof(buf), buf, 50) < 0))
       return "WriteRegister fail";
    /* RFConfiguration */
    n = 0;
    buf[n++] = 0x04;             /* MaxRtyCOM */
    buf[n++] = 1;                /* Retries (default 0) */
-   if (pn532_tx(s, 0x32, 0, NULL, n, buf) < 0 || pn532_rx(s, 0, NULL, sizeof(buf), buf, 50) < 0)
+   if (pn532_tx(s, 0x32, 0, NULL, n, buf, "RFConfiguration") < 0 || pn532_rx(s, 0, NULL, sizeof(buf), buf, 50) < 0)
       return "RFConfiguration fail";
    /* RFConfiguration */
    n = 0;
@@ -413,7 +430,7 @@ pn532_init(int s, unsigned char outputs)
    buf[n++] = 0x00;             /* RFU */
    buf[n++] = 0x0B;             /* Default (102.4 ms) */
    buf[n++] = 0x0A;             /* Default is 0x0A (51.2 ms) */
-   if (pn532_tx(s, 0x32, 0, NULL, n, buf) < 0 || pn532_rx(s, 0, NULL, sizeof(buf), buf, 50) < 0)
+   if (pn532_tx(s, 0x32, 0, NULL, n, buf, "RFConfiguration") < 0 || pn532_rx(s, 0, NULL, sizeof(buf), buf, 50) < 0)
       return "RFConfiguration fail";
    return NULL;
 }
@@ -422,7 +439,7 @@ int
 pn532_read_GPIO(int s)
 {                               /* Read P3/P7 (P72/P71 in top bits, P35-30 in rest) */
    unsigned char   buf[3];
-   int             l = pn532_tx(s, 0x0C, 0, NULL, 0, NULL);
+   int             l = pn532_tx(s, 0x0C, 0, NULL, 0, NULL, "Read GPIO");
    if (l >= 0)
       l = pn532_rx(s, 0, NULL, sizeof(buf), buf, 50);
    if (l < 0)
@@ -438,7 +455,7 @@ pn532_write_GPIO(int s, unsigned char value)
    unsigned char   buf[2];
    buf[0] = 0x80 | (value & 0x3F);
    buf[1] = 0x80 | ((value >> 5) & 0x06);
-   int             l = pn532_tx(s, 0x0E, 2, buf, 0, NULL);
+   int             l = pn532_tx(s, 0x0E, 2, buf, 0, NULL, "Write GPIO");
    if (l >= 0)
       l = pn532_rx(s, 0, NULL, sizeof(buf), buf, 50);
    return l;
@@ -450,13 +467,11 @@ int
 pn532_dx(void *pv, unsigned int len, unsigned char *data, unsigned int max, const char **strerr)
 {                               /* Card access function - sends to card starting CMD byte, and receives reply in to same buffer,
                                  * starting status byte, returns len */
-   if (strerr)
-      *strerr = "No error";
    if (!pv)
       return -1;
    int             s = *((int *)pv);
    unsigned char   tg = 1;
-   int             l = pn532_tx(s, 0x40, 1, &tg, len, data);
+   int             l = pn532_tx(s, 0x40, 1, &tg, len, data, *strerr);
    if (l >= 0)
    {
       unsigned char   status;
@@ -484,7 +499,7 @@ pn532_Cards(int s, unsigned char nfcid[MAXNFCID], unsigned char ats[MAXATS])
    //2 tags(we only report 1)
       buf[1] = 0;
    //106 kbps type A(ISO / IEC14443 Type A)
-      int             l = pn532_tx(s, 0x4A, 2, buf, 0, NULL);
+      int             l = pn532_tx(s, 0x4A, 2, buf, 0, NULL, "InListPassiveTarget");
    if (l < 0)
       return l;
    l = pn532_rx(s, 0, NULL, sizeof(buf), buf, 110);

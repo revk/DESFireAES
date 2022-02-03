@@ -27,6 +27,7 @@
 // Returns length received
 // Returns 0 for card gone
 // Returns -ve for any other error (should store error in errstr)
+// Note errstr will be pre-set on calling to a constant string that is the command being execute, for debug
 typedef int df_dx_func_t(void *obj, unsigned int len, unsigned char *data, unsigned int max, const char **errstr);
 
 typedef struct df_s df_t;
@@ -108,7 +109,8 @@ const char *df_init(df_t *, void *obj, df_dx_func_t * dx);
 // Examples
 //  Cmd 54 with txenc 1, rxenc 0, and len 2, adds CRC and encrypts from byte 1, returns rlen 1 (status byte)
 //  Cmd 51 with txenc 0, rxenc 8, and len 1, sends 51, receives 17 bytes, decrypts and checks CRC at byte 8, returns rlen 8 (status + 7 byte UID)
-const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *data, unsigned int txlen, unsigned char txenc, unsigned char rxenc, unsigned int *rlen);
+const char *df_dx(df_t * d, unsigned char cmd, unsigned int max, unsigned char *data, unsigned int txlen, unsigned char txenc, unsigned char rxenc, unsigned int *rlen, const char *name);
+const char *df_err(unsigned char c);	// Error code name
 
 // Main application functions
 
@@ -117,17 +119,17 @@ const char *df_free_memory(df_t * d, unsigned int *mem);
 // Ger version
 const char *df_get_version(df_t * d, unsigned char ver[28]);
 // Select an AID (NULL means AID 0)
-const char *df_select_application(df_t *, unsigned char aid[3]);
-// Format card, and set AES master key all zeros with key version 01, key, if set, is existing master AES key
-const char *df_format(df_t *, unsigned char keyver, unsigned char key[16]);
+const char *df_select_application(df_t *, const unsigned char aid[3]);
+// Format card, and set var/key specified
+const char *df_format(df_t *, unsigned char keyver, const unsigned char key[16]);
 // Authenticate with a key
-const char *df_authenticate(df_t *, unsigned char keyno, unsigned char key[16]);
+const char *df_authenticate(df_t *, unsigned char keyno, const unsigned char key[16]);
 // Get Key Version
 const char *df_get_key_version(df_t * d, unsigned char keyno, unsigned char *version);
 // Get Key settings
 const char *df_get_key_settings(df_t * d, unsigned char *setting, unsigned char *keynos);
 // Change to new (AES) key
-const char *df_change_key(df_t * d, unsigned char keyno, unsigned char version, unsigned char old[16], unsigned char key[16]);
+const char *df_change_key(df_t * d, unsigned char keyno, unsigned char version, const unsigned char old[16], const unsigned char key[16]);
 // Change settings on current key
 const char *df_change_key_settings(df_t * d, unsigned char settings);
 // Change card settings config
@@ -135,9 +137,9 @@ const char *df_set_configuration(df_t * d, unsigned char settings);
 // Get application IDs
 const char *df_get_application_ids(df_t * d, unsigned int *num, unsigned int space, unsigned char *aids);
 // Create application
-const char *df_create_application(df_t * d, unsigned char aid[3], unsigned char settings, unsigned char keys);
+const char *df_create_application(df_t * d, const unsigned char aid[3], unsigned char settings, unsigned char keys);
 // Delete application
-const char *df_delete_application(df_t * d, unsigned char aid[3]);
+const char *df_delete_application(df_t * d, const unsigned char aid[3]);
 // Get real UID
 const char *df_get_uid(df_t * d, unsigned char uid[7]);
 
