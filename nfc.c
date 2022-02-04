@@ -235,7 +235,7 @@ main(int argc, const char *argv[])
    unsigned char  *binaidkey[14];
    for (int i = 0; i < 14; i++)
       binaidkey[i] = expecthex(aidkey[i], 17, "aidkeyN", "Key version and 16 byte AES key data");
-   unsigned char  *binfilehex;
+   unsigned char  *binfilehex=NULL;
    int             binfilelen = 0;
    if (filehex)
       binfilelen = j_base16d(filehex, &binfilehex);
