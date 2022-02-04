@@ -297,10 +297,11 @@ main(int argc, const char *argv[])
    if (!df_get_version(&d, ver))
       j_store_string(j, "ver", j_base16a(sizeof(ver), ver));
 
+   df(select_application, NULL);
+
    j_t             a = NULL;    /* AID */
    j_t             m = j_store_object(j, "master");     /* master */
 
-   df(select_application, NULL);
    unsigned char   v;
    df(get_key_version, 0, &v);
    j_store_stringf(m, "key-ver", "%02X", v);
