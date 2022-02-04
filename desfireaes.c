@@ -776,7 +776,7 @@ const char *df_get_application_ids(df_t * d, unsigned int *num, unsigned int spa
       *num = 0;
    unsigned int rlen;
    unsigned char buf[1000];
-   const char *e = df_dx(d, 0x6A, sizeof(buf), buf, 1, 0, 0, &rlen, "Get Application");
+   const char *e = df_dx(d, 0x6A, sizeof(buf), buf, 1, 0, 0, &rlen, "Get Application IDs");
    if (e)
       return e;
    rlen--;

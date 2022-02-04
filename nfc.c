@@ -105,8 +105,7 @@ expecthex(const char *hex, int len, const char *name, const char *explain)
 
 static void
 fill_random(unsigned char *buf, size_t size)
-{
-   //Create our random A value
+{                               /* Create our random A value */
    int             f = open("/dev/urandom", O_RDONLY);
    if (f < 0)
       err(1, "random");
@@ -130,23 +129,41 @@ main(int argc, const char *argv[])
    const char     *aidkey[14] = {};
    int             remove = 0;
    int             format = 0;
-   int             listaids = 0;
-   int             listfiles = 0;
-   int             createaid = 0;
-   int             setmaster = 0;
+   int             aidlist = 0;
+   int             filelist = 0;
+   int             aidcreate = 0;
+   int             mastercreate = 0;
    int             aidkeys = 2;
-   int             aidsetting = 0xEB;   /* TODO should use Hex for this */
-   int             mastersetting = 0x09;        /* TODO should use Hex for this */
+   const char     *aidsetting = "EB";
+   const char     *mastersetting = "09";
    int             randomuid = 0;
    int             disableformat = 0;
    int             waiting = 10;
+   int             fileid = -1;
+   int             filedelete = 0;
+   int             filecreate = 0;
+   int             filesize = -1;
+   int             filerecords = -1;
+   int             filemin = 0;
+   int             filemax = 0x7FFFFFFF;
+   int             filevalue = 0;
+   int             filelc = 0;
+   int             filecomms = 1;
+   const char     *filetype = "D";
+   const char     *filedata = NULL;
+   const char     *filehex = NULL;
+   const char     *fileaccess = "0000";
    {
       poptContext     optCon;
       const struct poptOption optionsTable[] = {
          {"port", 'p', POPT_ARG_STRING, &port, 0, "Port", "/dev/cu.usbserial-..."},
          {"remove", 0, POPT_ARG_NONE, &remove, 0, "Wait for card to be removed"},
          {"master", 0, POPT_ARG_STRING, &master, 0, "Master key", "Key ver and AES"},
+         {"master-create", 0, POPT_ARG_NONE, &mastercreate, 0, "Set a master key"},
+         {"master-setting", 0, POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &mastersetting, 0, "Master key setting", "NN"},
+         {"aid-list", 0, POPT_ARG_NONE, &aidlist, 0, "List AIDs"},
          {"aid", 0, POPT_ARG_STRING, &aid, 0, "AID", "Application ID"},
+         {"aid-create", 0, POPT_ARG_NONE, &aidcreate, 0, "Create AID"},
          {"aidkey0", 0, POPT_ARG_STRING, &aidkey[0], 0, "Application key 0 (can be set for keys 0...D)", "Key ver and AES"},
          {"aidkey1", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[1], 0, "Application key 1", "Key ver and AES"},
          {"aidkey2", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[2], 0, "Application key 2", "Key ver and AES"},
@@ -161,16 +178,11 @@ main(int argc, const char *argv[])
          {"aidkeyB", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[11], 0, "Application key B", "Key ver and AES"},
          {"aidkeyC", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[12], 0, "Application key C", "Key ver and AES"},
          {"aidkeyD", 0, POPT_ARG_STRING | POPT_ARGFLAG_DOC_HIDDEN, &aidkey[13], 0, "Application key D", "Key ver and AES"},
-         {"list-files", 0, POPT_ARG_NONE, &listfiles, 0, "List files"},
          {"format", 0, POPT_ARG_NONE, &format, 0, "Format card"},
-         {"list-aids", 0, POPT_ARG_NONE, &listaids, 0, "List AIDs"},
-         {"create-aid", 0, POPT_ARG_NONE, &createaid, 0, "Create AID"},
-         {"set-master", 0, POPT_ARG_NONE, &setmaster, 0, "Set a master key"},
-         {"master-setting", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &mastersetting, 0, "Master key setting", "N"},
          {"disable-format", 0, POPT_ARG_NONE, &disableformat, 0, "Disable formatting"},
          {"random-uid", 0, POPT_ARG_NONE, &randomuid, 0, "Use random UID"},
          {"aid-keys", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &aidkeys, 0, "AID keys", "N"},
-         {"aid-setting", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &aidsetting, 0, "AID setting", "N"},
+         {"aid-setting", 0, POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &aidsetting, 0, "AID setting", "NN"},
          {"red", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &red, 0, "Red port", "30/31/32/33/34/5/71/72"},
          {"amber", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &amber, 0, "Amber port", "30/31/32/33/34/5/71/72"},
          {"green", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &green, 0, "Green port", "30/31/32/33/34/5/71/72"},
@@ -180,12 +192,26 @@ main(int argc, const char *argv[])
          {"led-found", 0, POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &ledfound, 0, "LED when card found and working", "R/A/G"},
          {"led-done", 0, POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &leddone, 0, "LED for done OK", "R/A/G"},
          {"led-fail", 0, POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &ledwait, 0, "LED for failed", "R/A/G"},
+         {"file-list", 0, POPT_ARG_NONE, &filelist, 0, "List files"},
+         {"file-id", 0, POPT_ARG_INT, &fileid, 0, "File number", "N"},
+         {"file-type", 0, POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &filetype, 0, "File type", "D/B/V/L/C"},
+         {"file-comms", 0, POPT_ARG_INT | POPT_ARGFLAG_SHOW_DEFAULT, &filecomms, 0, "File comms", "N"},
+         {"file-access", 0, POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &fileaccess, 0, "File access", "NNNN"},
+         {"file-delete", 0, POPT_ARG_NONE, &filedelete, 0, "Delete file"},
+         {"file-create", 0, POPT_ARG_NONE, &filecreate, 0, "Create file"},
+         {"file-data", 0, POPT_ARG_STRING, &filedata, 0, "Write file data", "Text"},
+         {"file-hex", 0, POPT_ARG_STRING, &filehex, 0, "Write file data", "Hex"},
+         {"file-size", 0, POPT_ARG_INT, &filesize, 0, "File size", "N"},
+         {"file-records", 0, POPT_ARG_INT, &filerecords, 0, "File records", "N"},
+         {"file-min", 0, POPT_ARG_INT, &filemin, 0, "File min", "N"},
+         {"file-max", 0, POPT_ARG_INT, &filemax, 0, "File max", "N"},
+         {"file-vale", 0, POPT_ARG_INT, &filevalue, 0, "File initial vale", "N"},
+         {"file-lc", 0, POPT_ARG_NONE, &filelc, 0, "File limited credit"},
          {"debug", 'v', POPT_ARG_NONE, &debug, 0, "Debug"},
          POPT_AUTOHELP {}
       };
 
       optCon = poptGetContext(NULL, argc, argv, optionsTable, 0);
-      //poptSetOtherOptionHelp(optCon, "");
 
       int             c;
       if ((c = poptGetNextOpt(optCon)) < -1)
@@ -203,9 +229,16 @@ main(int argc, const char *argv[])
    }
    hex(master, 17, "Key version and 16 byte AES key data");
    hex(aid, 3, "Application ID");
+   hex(fileaccess, 2, "4 hex digits");
+   hex(aidsetting, 1, "2 hex digits");
+   hex(mastersetting, 1, "2 hex digits");
    unsigned char  *binaidkey[14];
    for (int i = 0; i < 14; i++)
       binaidkey[i] = expecthex(aidkey[i], 17, "aidkeyN", "Key version and 16 byte AES key data");
+   unsigned char  *binfilehex;
+   int             binfilelen = 0;
+   if (filehex)
+      binfilelen = j_base16d(filehex, &binfilehex);
    s = open(port, O_RDWR);
    if (s < 0)
       err(1, "Cannot open %s", port);
@@ -246,6 +279,7 @@ main(int argc, const char *argv[])
 
    j = j_create();
    atexit(&bye);
+
    if (*nfcid)
       j_store_string(j, "id", j_base16a(*nfcid, nfcid + 1));
    if (*ats)
@@ -260,14 +294,16 @@ main(int argc, const char *argv[])
    unsigned char  *currentkey = binmaster ? : binzero;
 
    unsigned char   ver[28];
-   if (!(e = df_get_version(&d, ver)))
+   if (!df_get_version(&d, ver))
       j_store_string(j, "ver", j_base16a(sizeof(ver), ver));
+
+   j_t             a = NULL;    /* AID */
+   j_t             m = j_store_object(j, "master");     /* master */
 
    df(select_application, NULL);
    unsigned char   v;
    df(get_key_version, 0, &v);
-   if (aid)
-      j_store_string(j, "aid", j_base16a(3, binaid));
+   j_store_stringf(m, "key-ver", "%02X", v);
 
    if (!binmaster || *binmaster != v || df_authenticate(&d, 0, binmaster + 1))
    {
@@ -285,7 +321,7 @@ main(int argc, const char *argv[])
    if (format)
    {
       df(format, *currentkey, currentkey + 1);
-      if (binmaster && !setmaster)
+      if (binmaster && !mastercreate)
       {
          df(change_key, 0x80, 0, currentkey + 1, NULL); /* clear master key */
          currentkey = binzero;
@@ -293,23 +329,28 @@ main(int argc, const char *argv[])
       }
       j_store_boolean(j, "formatted", 1);
    }
-   if (setmaster && currentkey == binzero)
+   if (mastercreate && currentkey == binzero)
    {
       if (!binmaster)
          fill_random(binmaster = malloc(17), 17);       /* new master */
       df(change_key, 0x80, *binmaster, currentkey + 1, binmaster + 1);
       currentkey = binmaster;
       df(authenticate, 0, binmaster + 1);
-      df(change_key_settings, mastersetting);
-      j_store_string(j, "master", j_base16a(17, binmaster));
+      df(change_key_settings, *binmastersetting);
+      j_store_string(m, "key", j_base16a(17, binmaster));
 
-   } else if (setmaster || randomuid || disableformat)
+   } else if (mastercreate || randomuid || disableformat)
       df(set_configuration, randomuid * 2 + disableformat);
-   if (createaid)
+   {
+      unsigned char   setting = 0;
+      df(get_key_settings, &setting, NULL);
+      j_store_stringf(m, "settings", "%02X", setting);
+   }
+   if (aidcreate)
    {
       if (!binaid)
          errx(1, "Set --aid");
-      df(create_application, binaid, aidsetting, aidkeys);
+      df(create_application, binaid, *binaidsetting, aidkeys);
       j_t             k = j_store_array(j, "aid-keys");
       for (int i = 0; i < aidkeys; i++)
       {
@@ -325,12 +366,7 @@ main(int argc, const char *argv[])
       }
       df(authenticate, 0, binaidkey[0] + 1);
    }
-   if (binaid)
-   {
-      /* TODO get key settings, number of keys */
-      /* TODO key versions */
-   }
-   if (listaids)
+   if (aidlist)
    {
       unsigned char   aids[50 * 3];
       int             num = 0;
@@ -339,21 +375,40 @@ main(int argc, const char *argv[])
       for (int i = 0; i < num; i++)
          j_append_string(a, j_base16a(3, aids + 3 * i));
    }
-   if (listfiles)
+   if (binaid)
+   {                            /* AID set, select application */
+      a = j_store_object(j, "aid");
+      j_store_string(a, "id", j_base16a(3, binaid));
+      df(select_application, binaid);
+      unsigned char   setting = 0,
+                      keynos = 0;
+      df(get_key_settings, &setting, &keynos);
+      if (keynos & 0x80)
+         j_store_boolean(a, "aes", 1);
+      keynos &= 0x7F;
+      j_store_stringf(a, "settings", "%02X", setting);
+      j_store_int(a, "keys", keynos);
+      j_t             k = j_store_array(a, "key-ver");
+      for (int i = 0; i < keynos; i++)
+      {
+         df(get_key_version, i, &v);
+         j_append_stringf(k, "%02X", v);
+      }
+   }
+   if (filelist)
    {
       if (!binaid)
          errx(1, "Set --aid");
-      df(select_application, binaid);
       for (int i = 0; i < 13; i++)
          if (binaidkey[i] && !df_authenticate(&d, i, binaidkey[i] + 1))
             break;
       unsigned long long ids;
       df(get_file_ids, &ids);
-      j_t             a = j_store_array(j, "files");
+      j_t             files = j_store_array(a, "files");
       for (int i = 0; i < 64; i++)
          if (ids & (1ULL << i))
          {
-            j_t             f = j_append_object(a);
+            j_t             f = j_append_object(files);
             j_store_int(f, "id", i);
             char            type;
             unsigned char   comms;
@@ -379,7 +434,7 @@ main(int argc, const char *argv[])
                if (limited)
                   j_store_int(f, "limited", limited);
                if (lc)
-                  j_store_int(f, "lc", lc);
+                  j_store_boolean(f, "lc", lc);
                unsigned int    value;
                if (!df_get_value(&d, i, comms, &value))
                   j_store_int(f, "value", value);
@@ -392,9 +447,46 @@ main(int argc, const char *argv[])
             }
          }
    }
-   /* TODO creating file */
-   /* TODO write file */
-   /* TODO delete file */
+   if (binfilehex && filedata)
+      errx(1, "Specify either --file-data or --file-hex, not both");
+   if (filedelete)
+   {
+      if (fileid < 0)
+         errx(1, "Specify --file-id");
+      df(delete_file, fileid);
+   }
+   if (filecreate)
+   {
+      if (fileid < 0)
+         errx(1, "Specify --file-id");
+      if (filesize < 0 && binfilehex)
+         filesize = binfilelen;
+      if (filesize < 0 && filedata)
+         filesize = strlen(filedata);
+      if (filesize < 0)
+         errx(1, "Specify --file-size (or data to write)");
+      if (strlen(filetype) != 1 || !strchr("", *filetype))
+         errx(1, "--file-type is D/B/V/L/C");
+      if (*filetype == 'C' && filerecords < 0)
+         errx(1, "Specify --file-records");
+      df(create_file, fileid, *filetype, filecomms, binfileaccess[0] << 8 | binfileaccess[1], filesize, filemin, filemax, filerecords, filevalue, filelc);
+   }
+   if (binfilehex || filedata)
+   {
+      if (fileid < 0)
+         errx(1, "Specify --file-id");
+      char            type;
+      unsigned char   comms;
+      unsigned short  access;
+      unsigned int    size;
+      unsigned int    min;
+      unsigned int    max;
+      unsigned int    recs;
+      unsigned int    limited;
+      unsigned char   lc;
+      df(get_file_settings, fileid, &type, &comms, &access, &size, &min, &max, &recs, &limited, &lc);
+      /* TODO */
+   }
    {                            /* free mem */
       unsigned int    mem;
       df(free_memory, &mem);
