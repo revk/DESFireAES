@@ -555,7 +555,7 @@ const char *df_authenticate_general(df_t * d, unsigned char keyno, unsigned char
    unsigned char buf[64];
    unsigned int n = 1;
    wbuf1(keyno);
-   if ((e = df_dx(d, keylen == 8 ? 0x1A : 0xAA, sizeof(buf), buf, n, 0, 0, &rlen, keylen==8?"Authenticate DES":keylen==24?"Authenticate 3DES":"Authenticate AES")))
+   if ((e = df_dx(d, keylen == 8 ? 0x1A : 0xAA, sizeof(buf), buf, n, 0, 0, &rlen, keylen == 8 ? "Authenticate DES" : keylen == 24 ? "Authenticate 3DES" : "Authenticate AES")))
       return e;
    if (rlen != keylen + 1)
       return "Bad response length for auth";
