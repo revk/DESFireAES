@@ -305,19 +305,21 @@ main(int argc, const char *argv[])
    unsigned char   v;
    df(get_key_version, 0, &v);
    j_store_stringf(m, "key-ver", "%02X", v);
-
-   if (!binmaster || *binmaster != v || df_authenticate(&d, 0, binmaster + 1))
+   if (!format)
    {
-      currentkey = binzero;
-      df_authenticate(&d, 0, NULL);     /* try default */
-   }
-   if (!df_isauth(&d))
-      errx(1, "Authentication failed, no further actions can be performed");
+      if (!binmaster || *binmaster != v || df_authenticate(&d, 0, binmaster + 1))
+      {
+         currentkey = binzero;
+         df_authenticate(&d, 0, NULL);  /* try default */
+      }
+      if (!df_isauth(&d))
+         errx(1, "Authentication failed, no further actions can be performed");
 
-   {                            /* Get UID */
-      unsigned char   uid[7];
-      df(get_uid, uid);
-      j_store_string(j, "uid", j_base16a(sizeof(uid), uid));
+      {                         /* Get UID */
+         unsigned char   uid[7];
+         df(get_uid, uid);
+         j_store_string(j, "uid", j_base16a(sizeof(uid), uid));
+      }
    }
    if (format)
    {
