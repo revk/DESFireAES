@@ -21,11 +21,14 @@ update:
 AJL/ajl.o: AJL
 	make -C AJL
 
-nfc: nfc.c desfireaes.o pn532.o include/desfireaes.h pn532.h AJL/ajl.o AJL/ajl.h
+nfc: nfc.c desfireaes.o pn532.o include/desfireaes.h pn532.h AJL/ajl.o AJL/ajl.h tdea.o
 	gcc -fPIC -O -DLIB -o $@ -Iinclude $< desfireaes.o pn532.o ${INCLUDES} ${LIBS} -lcrypto -lssl -lpopt AJL/ajl.o -IAJL
 
 desfireaes.o: desfireaes.c
 	gcc -fPIC -O -DLIB -c -o $@ -Iinclude $< ${INCLUDES}
 
 pn532.o: pn532.c
+	gcc -fPIC -O -DLIB -c -o $@ -Iinclude $< ${INCLUDES}
+
+tdea.o: tdea.c
 	gcc -fPIC -O -DLIB -c -o $@ -Iinclude $< ${INCLUDES}
