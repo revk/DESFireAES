@@ -360,10 +360,6 @@ main(int argc, const char *argv[])
          if (!binaidkey[i])
             fill_random(binaidkey[i] = malloc(17), 17); /* new key */
          j_append_string(k, j_base16a(17, binaidkey[i]));
-      }
-      df(change_key, 0, *binaidkey[0], NULL, binaidkey[0] + 1);
-      for (int i = 1; 1 < aidkeys; i++)
-      {
          df(authenticate, i, NULL);     /* own key to change it */
          df(change_key, i, *binaidkey[i], NULL, binaidkey[i] + 1);
       }
