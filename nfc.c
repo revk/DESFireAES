@@ -247,8 +247,7 @@ main(int argc, const char *argv[])
       if (tcgetattr(s, &t))
          err(1, "Failed to get serial setting");
       cfmakeraw(&t);
-      cfsetispeed(&t, 115200);
-      cfsetospeed(&t, 115200);
+      cfsetspeed(&t, 115200);
       if (tcsetattr(s, TCSANOW, &t))
          err(1, "Failed to set serial");
    }
