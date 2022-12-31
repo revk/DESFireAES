@@ -19,6 +19,7 @@
 #include <esp_system.h>
 #include <aes/esp_aes.h>
 #include "esp_log.h"
+#include "esp_random.h"
 #else
 #include <stdio.h>
 #include <err.h>
