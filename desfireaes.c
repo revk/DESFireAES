@@ -569,7 +569,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, co
       key = zero;
    }
    d->keylen = 0;
-   d->keyno = keyno;
+   d->keyno = (keyno & 15);
    const char *e;
    unsigned int rlen;
    unsigned char buf[64];
@@ -730,8 +730,8 @@ df_change_key (df_t * d, unsigned char keyno, unsigned char version, const unsig
       old = zero;
    unsigned char buf[64] = { 0 };
    int n = 0;
-   buf[n++] = 0xC4;
-   buf[n++] = keyno;
+   wbuf1 (0xC4);                // Needs setting as we make the CRCs here not in df_dx
+   wbuf1 (keyno);
    keyno &= 15;
    memcpy (buf + n, key, 16);
    n += 16;
@@ -743,7 +743,7 @@ df_change_key (df_t * d, unsigned char keyno, unsigned char version, const unsig
          buf[2 + q] ^= old[q];
       n += add_crc (16, key, buf + n);
    }
-   if ((e = df_dx (d, buf[0], sizeof (buf), buf, n, 2, 0, NULL, "Change Key")))
+   if ((e = df_dx (d, *buf, sizeof (buf), buf, n, 2, 0, NULL, "Change Key")))
       return e;
    if (keyno == d->keyno)
       d->keylen = 0;            // No longer secure;
