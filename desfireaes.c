@@ -447,7 +447,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
          decrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, buf + 1, buf + 1, len - 1);
          dump ("Dec", len, buf);
          unsigned int c = buf4 (rxenc);
-         buf[rxenc] = buf[0];   // Status at end of playload
+         buf[rxenc] = buf[0];   // Status at end of payload
          if (c != df_crc (rxenc, buf + 1))
             return "Rx CRC fail";
       } else if (len > 1)
@@ -576,10 +576,11 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, co
    unsigned int n = 1;
    wbuf1 (keyno);
    if ((e =
-        df_dx (d, keylen == 8 ? 0x1A : keylen == 24 ? 0x0A : 0xAA, sizeof (buf), buf, n, 0, 0, &rlen,
+        df_dx (d, keylen == 8 ? 0x0A : keylen == 24 ? 0x1A : 0xAA, sizeof (buf), buf, n, 0, 0, &rlen,
                keylen == 8 ? "Authenticate DES" : keylen == 24 ? "Authenticate 3DES" : "Authenticate AES")))
       return e;
-   if(keylen==24)keylen=8; // 3DES - actual key may be 24 but blocks are 8
+   if (keylen == 24)
+      keylen = 8;               // 3DES - actual key may be 24 but blocks are 8
    if (rlen != keylen + 1)
       return "Bad response length for auth";
    fill_random (d->sk1, keylen);
@@ -664,25 +665,23 @@ df_isauth (df_t * d)
    return d->keylen;            // Set when authentication is complete, and cleared for cases that lose it
 }
 
+#ifndef	ESP_PLATFORM
 const char *
 df_des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[8])
 {                               // Authenticate with DES - used to convert card to AES
-#ifdef	ESP_PLATFORM
-   return "DES not on ESP platform";
-#else
    return df_authenticate_general (d, keyno, 8, key, EVP_des_cbc ());
-#endif
 }
+#endif
 
+#ifndef	ESP_PLATFORM
 const char *
 df_3des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[24])
 {                               // Authenticate with 3DES - used to convert card to AES
-#ifdef	ESP_PLATFORM
-   return "DES not on ESP platform";
-#else
-   return df_authenticate_general (d, keyno, 24, key, EVP_des_ede3_cbc ());
-#endif
+   const char *ret = df_authenticate_general (d, keyno, 24, key, EVP_des_ede3_cbc ());
+   d->cipher = EVP_des_cbc ();  // Ongoing is simple DES not 3DES
+   return ret;
 }
+#endif
 
 const char *
 df_change_file_settings (df_t * d, unsigned char fileno, unsigned char comms, unsigned short oldaccess, unsigned short access)
@@ -776,16 +775,18 @@ df_format (df_t * d, unsigned char version, const unsigned char key[16])
       e = df_authenticate (d, 0, currentkey = zero);
    if (!e)
       e = df_dx (d, 0xFC, 0, NULL, 1, 0, 0, NULL, "Format");    // Not DES, format (does not change key)
+#ifndef	ESP_PLATFORM
    else
    {                            // If all else fails, try DES with zero key
-      e = df_3des_authenticate (d, 0, currentkey = zero);
+      e = df_3des_authenticate (d, 0, currentkey = zero);       // Try 3DES first
       if (e)
-         e = df_des_authenticate (d, 0, currentkey = zero);
+         e = df_des_authenticate (d, 0, currentkey = zero);     // Surprised if this is ever needed
       if (!e)
          e = df_dx (d, 0xFC, 0, NULL, 1, 0, 0, NULL, "Format"); // Format the card anyway in case DES had stuff
       if (!e)
          e = df_change_key (d, 0x80, 0, NULL, NULL);    // Change to AES
    }
+#endif
    if (!e)
       e = df_authenticate (d, 0, currentkey);   // Re-auth after format or change key
    if (!e)
