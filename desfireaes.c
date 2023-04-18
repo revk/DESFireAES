@@ -254,7 +254,7 @@ df_crc (unsigned int len, const unsigned char *data)
    return crc;
 }
 
-static void
+static int
 add_crc (unsigned int len, const unsigned char *src, unsigned char *dst)
 {
    unsigned int c = df_crc (len, src);
@@ -262,6 +262,7 @@ add_crc (unsigned int len, const unsigned char *src, unsigned char *dst)
    dst[1] = c >> 8;
    dst[2] = c >> 16;
    dst[3] = c >> 24;
+   return 4;                    // Len
 }
 
 const char *
@@ -353,10 +354,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
          if (((len + 4) | 15) + 1 > max)
             return "Tx no space";
          if (cmd != 0xC4)
-         {                      // Add CRC (C4 is special case as multiple CRCs and padding)
-            add_crc (len, buf, buf + len);
-            len += 4;
-         }
+            len += add_crc (len, buf, buf + len);       // Add CRC (C4 is special case as multiple CRCs and padding)
          // Padding
          while ((len - txenc) % d->keylen)
             buf[len++] = 0;
@@ -578,9 +576,10 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, co
    unsigned int n = 1;
    wbuf1 (keyno);
    if ((e =
-        df_dx (d, keylen == 8 ? 0x0A : keylen == 24 ? 0x1A : 0xAA, sizeof (buf), buf, n, 0, 0, &rlen,
+        df_dx (d, keylen == 8 ? 0x1A : keylen == 24 ? 0x0A : 0xAA, sizeof (buf), buf, n, 0, 0, &rlen,
                keylen == 8 ? "Authenticate DES" : keylen == 24 ? "Authenticate 3DES" : "Authenticate AES")))
       return e;
+   if(keylen==24)keylen=8; // 3DES - actual key may be 24 but blocks are 8
    if (rlen != keylen + 1)
       return "Bad response length for auth";
    fill_random (d->sk1, keylen);
@@ -677,7 +676,7 @@ df_des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[8])
 
 const char *
 df_3des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[24])
-{                               // Authenticate with DES - used to convert card to AES
+{                               // Authenticate with 3DES - used to convert card to AES
 #ifdef	ESP_PLATFORM
    return "DES not on ESP platform";
 #else
@@ -731,21 +730,20 @@ df_change_key (df_t * d, unsigned char keyno, unsigned char version, const unsig
    if (!old)
       old = zero;
    unsigned char buf[64] = { 0 };
-   int n;
-   buf[0] = 0xC4;
-   buf[1] = keyno;
+   int n = 0;
+   buf[n++] = 0xC4;
+   buf[n++] = keyno;
    keyno &= 15;
-   memcpy (buf + 2, key, 16);
-   buf[18] = version;
-   add_crc (19, buf, buf + 19);
+   memcpy (buf + n, key, 16);
+   n += 16;
+   buf[n++] = version;
+   n += add_crc (n, buf, buf + n);
    if (keyno != d->keyno)
    {                            // Changing different key
-      for (n = 0; n < 16; n++)
-         buf[2 + n] ^= old[n];
-      add_crc (16, key, buf + 23);
-      n = 27;
-   } else
-      n = 23;
+      for (int q = 0; q < 16; q++)
+         buf[2 + q] ^= old[q];
+      n += add_crc (16, key, buf + n);
+   }
    if ((e = df_dx (d, buf[0], sizeof (buf), buf, n, 2, 0, NULL, "Change Key")))
       return e;
    if (keyno == d->keyno)
@@ -781,6 +779,8 @@ df_format (df_t * d, unsigned char version, const unsigned char key[16])
    else
    {                            // If all else fails, try DES with zero key
       e = df_3des_authenticate (d, 0, currentkey = zero);
+      if (e)
+         e = df_des_authenticate (d, 0, currentkey = zero);
       if (!e)
          e = df_dx (d, 0xFC, 0, NULL, 1, 0, 0, NULL, "Format"); // Format the card anyway in case DES had stuff
       if (!e)
