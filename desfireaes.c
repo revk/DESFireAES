@@ -610,8 +610,6 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char blocklen, 
       memcpy (d->sk0 + 12, d->sk2 + 12, 4);
    }
 #ifndef ESP_PLATFORM
-   else
-      cipher = EVP_des_cbc ();  // Ongoing is simple DES not 2TDEA
    d->cipher = cipher;
 #endif
    d->blocklen = blocklen;      // Marks as authenticated
@@ -658,9 +656,9 @@ df_authenticate (df_t * d, unsigned char keyno, const unsigned char key[16])
 
 #ifndef	ESP_PLATFORM
 const char *
-df_des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[16])
+df_des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[8])
 {                               // Authenticate with 3DES - used to convert card to AES
-   return df_authenticate_general (d, keyno, 8, key, EVP_des_ede_cbc ());
+   return df_authenticate_general (d, keyno, 8, key, EVP_des_cbc ());
 }
 #endif
 
