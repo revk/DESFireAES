@@ -78,7 +78,7 @@ fill_random (unsigned char *buf, size_t size)
 #define decrypt(ctx,cipher,blocklen,key,iv,out,in,len) aes_decrypt(key,iv,out,in,len)
 static const char *
 aes_decrypt (const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
-{
+{ // Always AES
    if (len <= 0)
       return NULL;
    len = (len + 15) / 16 * 16;
@@ -118,14 +118,14 @@ decrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int blocklen, const un
 
 // Encrypt, updating iv
 #ifdef	ESP_PLATFORM
-#define doencrypt(ctx,cipher,blocklen,key,iv,out,in,len) aes_encrypt(blocklen,key,iv,out,in,len)
+#define doencrypt(ctx,cipher,blocklen,key,iv,out,in,len) aes_encrypt(key,iv,out,in,len)
 static const char *
-aes_encrypt (int blocklen, const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
-{
+aes_encrypt (const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
+{ // Always AES
    if (len <= 0)
       return NULL;
    len = (len + 15) / 16 * 16;
-   //ESP_LOG_BUFFER_HEX_LEVEL ("AES Enc", key, blocklen, ESP_LOG_INFO);
+   //ESP_LOG_BUFFER_HEX_LEVEL ("AES Enc", key, 16, ESP_LOG_INFO);
    //ESP_LOG_BUFFER_HEX_LEVEL ("AES In ", in, len, ESP_LOG_INFO);
    esp_aes_context ctx;
    esp_aes_init (&ctx);
@@ -134,7 +134,7 @@ aes_encrypt (int blocklen, const unsigned char *key, unsigned char *iv, unsigned
    {
       unsigned char *o = out;
       if (!out)
-         o = malloc (len);      // TODO may be better to do the CBC a block at a time with lower level calls, 
+         o = malloc (len);     
       err = esp_aes_crypt_cbc (&ctx, ESP_AES_ENCRYPT, len, iv, in, o);
       if (!out)
          free (o);
@@ -155,7 +155,7 @@ doencrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int blocklen, const 
       return "Encrypt error";
    unsigned char *o = out;
    if (!out)
-      o = malloc (len);         // TODO may be better to do the CBC a block at a time with lower level calls, 
+      o = malloc (len);       
    EVP_CIPHER_CTX_set_padding (ctx, 0);
    int n;
    if (EVP_EncryptUpdate (ctx, o, &n, in, len) != 1 || EVP_EncryptFinal_ex (ctx, o + n, &n) != 1)
