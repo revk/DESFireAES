@@ -126,6 +126,7 @@ const char *df_format(df_t *, unsigned char keyver, const unsigned char key[16])
 const char *df_authenticate(df_t *, unsigned char keyno, const unsigned char key[16]);
 #ifndef ESP_PLATFORM
 const char * df_des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[16]);
+const char * df_check_des (void);
 #endif
 // Confirm if authenticated
 #define	df_isauth(d)	((d)->blocklen)
