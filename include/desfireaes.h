@@ -124,6 +124,9 @@ const char *df_select_application(df_t *, const unsigned char aid[3]);
 const char *df_format(df_t *, unsigned char keyver, const unsigned char key[16]);
 // Authenticate with a key
 const char *df_authenticate(df_t *, unsigned char keyno, const unsigned char key[16]);
+#ifndef ESP_PLATFORM
+const char * df_des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[16]);
+#endif
 // Confirm if authenticated
 int df_isauth(df_t *);
 // Get Key Version
