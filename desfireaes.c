@@ -75,18 +75,18 @@ fill_random (unsigned char *buf, size_t size)
 
 // Decrypt, updating iv
 #ifdef ESP_PLATFORM
-#define decrypt(ctx,cipher,keylen,key,iv,out,in,len) aes_decrypt(keylen,key,iv,out,in,len)
+#define decrypt(ctx,cipher,blocklen,key,iv,out,in,len) aes_decrypt(key,iv,out,in,len)
 static const char *
-aes_decrypt (int keylen, const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
+aes_decrypt (const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
 {
    if (len <= 0)
       return NULL;
    len = (len + 15) / 16 * 16;
-   //ESP_LOG_BUFFER_HEX_LEVEL ("AES Dec", key, keylen, ESP_LOG_INFO);
+   //ESP_LOG_BUFFER_HEX_LEVEL ("AES Dec", key, 16, ESP_LOG_INFO);
    //ESP_LOG_BUFFER_HEX_LEVEL ("AES In ", in, len, ESP_LOG_INFO);
    esp_aes_context ctx;
    esp_aes_init (&ctx);
-   esp_err_t err = esp_aes_setkey (&ctx, key, keylen * 8);
+   esp_err_t err = esp_aes_setkey (&ctx, key, blocklen * 8);
    if (!err)
       err = esp_aes_crypt_cbc (&ctx, ESP_AES_DECRYPT, len, iv, in, out);
    esp_aes_free (&ctx);
@@ -97,12 +97,12 @@ aes_decrypt (int keylen, const unsigned char *key, unsigned char *iv, unsigned c
 }
 #else
 static const char *
-decrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsigned char *key, unsigned char *iv,
+decrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int blocklen, const unsigned char *key, unsigned char *iv,
          unsigned char *out, const unsigned char *in, int len)
 {
-   len = (len + keylen - 1) / keylen * keylen;
-   unsigned char newiv[keylen];
-   memcpy (newiv, in + len - keylen, keylen);
+   len = (len + blocklen - 1) / blocklen * blocklen;
+   unsigned char newiv[blocklen];
+   memcpy (newiv, in + len - blocklen, blocklen);
    if (EVP_DecryptInit_ex (ctx, cipher, NULL, key, iv) != 1)
       return "Decrypt error";
    EVP_CIPHER_CTX_set_padding (ctx, 0);
@@ -111,25 +111,25 @@ decrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsi
       return "Decrypt error";
    if (EVP_DecryptFinal_ex (ctx, out + n, &n) != 1)
       return "Decrypt error";
-   memcpy (iv, newiv, keylen);
+   memcpy (iv, newiv, blocklen);
    return NULL;
 }
 #endif
 
 // Encrypt, updating iv
 #ifdef	ESP_PLATFORM
-#define doencrypt(ctx,cipher,keylen,key,iv,out,in,len) aes_encrypt(keylen,key,iv,out,in,len)
+#define doencrypt(ctx,cipher,blocklen,key,iv,out,in,len) aes_encrypt(blocklen,key,iv,out,in,len)
 static const char *
-aes_encrypt (int keylen, const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
+aes_encrypt (int blocklen, const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
 {
    if (len <= 0)
       return NULL;
    len = (len + 15) / 16 * 16;
-   //ESP_LOG_BUFFER_HEX_LEVEL ("AES Enc", key, keylen, ESP_LOG_INFO);
+   //ESP_LOG_BUFFER_HEX_LEVEL ("AES Enc", key, blocklen, ESP_LOG_INFO);
    //ESP_LOG_BUFFER_HEX_LEVEL ("AES In ", in, len, ESP_LOG_INFO);
    esp_aes_context ctx;
    esp_aes_init (&ctx);
-   esp_err_t err = esp_aes_setkey (&ctx, key, keylen * 8);
+   esp_err_t err = esp_aes_setkey (&ctx, key, blocklen * 8);
    if (!err)
    {
       unsigned char *o = out;
@@ -147,10 +147,10 @@ aes_encrypt (int keylen, const unsigned char *key, unsigned char *iv, unsigned c
 }
 #else
 static const char *
-doencrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const unsigned char *key, unsigned char *iv,
+doencrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int blocklen, const unsigned char *key, unsigned char *iv,
            unsigned char *out, const unsigned char *in, int len)
 {
-   len = (len + keylen - 1) / keylen * keylen;
+   len = (len + blocklen - 1) / blocklen * blocklen;
    if (EVP_EncryptInit_ex (ctx, cipher, NULL, key, iv) != 1)
       return "Encrypt error";
    unsigned char *o = out;
@@ -164,7 +164,7 @@ doencrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int keylen, const un
          free (o);
       return "Encrypt error";
    }
-   memcpy (iv, o + len - keylen, keylen);
+   memcpy (iv, o + len - blocklen, blocklen);
    if (!out)
       free (o);
    return NULL;
@@ -210,27 +210,27 @@ cmac (df_t * d, unsigned int len, unsigned char *data)
 #ifdef DEBUG_CMAC
    dump ("CMAC of", len, data);
 #endif
-   unsigned char temp[d->keylen];       // For last block
-   int last = len - (len % d->keylen ? : len ? d->keylen : 0);
+   unsigned char temp[d->blocklen];     // For last block
+   int last = len - (len % d->blocklen ? : len ? d->blocklen : 0);
    int p = len - last;
    if (p)
       memcpy (temp, data + last, p);
-   if (p && p < d->keylen)
+   if (p && p < d->blocklen)
    {                            // pad
       temp[p++] = 0x80;
-      while (p < d->keylen)
+      while (p < d->blocklen)
          temp[p++] = 0;
-      for (p = 0; p < d->keylen; p++)
+      for (p = 0; p < d->blocklen; p++)
          temp[p] ^= d->sk2[p];
    } else
-      for (p = 0; p < d->keylen; p++)
+      for (p = 0; p < d->blocklen; p++)
          temp[p] ^= d->sk1[p];
    if (last)
-      doencrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, NULL, data, last);
+      doencrypt (d->ctx, d->cipher, d->blocklen, d->sk0, d->cmac, NULL, data, last);
    if (last < len)
-      doencrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, NULL, temp, len - last);
+      doencrypt (d->ctx, d->cipher, d->blocklen, d->sk0, d->cmac, NULL, temp, len - last);
 #ifdef DEBUG_CMAC
-   dump ("CMAC", d->keylen, d->cmac);
+   dump ("CMAC", d->blocklen, d->cmac);
 #endif
 }
 
@@ -338,8 +338,8 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
       cmd = buf[0];
    dump ("Tx", len, buf);
    if (cmd == 0xAA || cmd == 0x1A || cmd == 0x0A || cmd == 0x5A)
-      d->keylen = 0;
-   if (d->keylen)
+      d->blocklen = 0;
+   if (d->blocklen)
    {                            // Authenticated
       if (txenc == 0xFF)
       {                         // Append CMAC
@@ -356,10 +356,10 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
          if (cmd != 0xC4)
             len += add_crc (len, buf, buf + len);       // Add CRC (C4 is special case as multiple CRCs and padding)
          // Padding
-         while ((len - txenc) % d->keylen)
+         while ((len - txenc) % d->blocklen)
             buf[len++] = 0;
          dump ("Pre enc", len, buf);
-         doencrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, buf + txenc, buf + txenc, len - txenc);
+         doencrypt (d->ctx, d->cipher, d->blocklen, d->sk0, d->cmac, buf + txenc, buf + txenc, len - txenc);
          dump ("Tx(enc)", len, buf);
       } else
          cmac (d, len, buf);    // CMAC update
@@ -385,12 +385,12 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
          dump ("Rx(raw)", b, p);
          if (!b)
          {
-            d->keylen = 0;
+            d->blocklen = 0;
             return "";          // Card gone
          }
          if (*p != 0xAF)
          {
-            d->keylen = 0;
+            d->blocklen = 0;
             return "Tx expected AF";
          }
          p += TXMAX;
@@ -416,7 +416,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
          dump ("Rx(raw)", b, p);
          if (!b)
          {
-            d->keylen = 0;
+            d->blocklen = 0;
             return "";          // Card gone
          }
          if (p > buf)
@@ -438,13 +438,13 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
       len = p - buf;
    }
    // Post process
-   if (d->keylen)
+   if (d->blocklen)
    {
       if (rxenc)
       {                         // Encrypted
          if (len != ((rxenc + 3) | 15) + 2)
             return "Rx Bad encrypted length";
-         decrypt (d->ctx, d->cipher, d->keylen, d->sk0, d->cmac, buf + 1, buf + 1, len - 1);
+         decrypt (d->ctx, d->cipher, d->blocklen, d->sk0, d->cmac, buf + 1, buf + 1, len - 1);
          dump ("Dec", len, buf);
          unsigned int c = buf4 (rxenc);
          buf[rxenc] = buf[0];   // Status at end of payload
@@ -470,7 +470,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
    // Check response
    if (*buf && *buf != 0xAF)
    {
-      d->keylen = 0;            // Errors kick us out
+      d->blocklen = 0;          // Errors kick us out
       return df_err (*buf);
    }
    dump ("Rx", len, buf);
@@ -501,7 +501,7 @@ df_select_application (df_t * d, const unsigned char aid[3])
       memset (d->aid, 0, sizeof (d->aid));
    else
       memcpy (d->aid, aid, sizeof (d->aid));
-   d->keylen = 0;
+   d->blocklen = 0;
    return e;
 }
 
@@ -556,19 +556,16 @@ df_get_key_version (df_t * d, unsigned char keyno, unsigned char *version)
 }
 
 const char *
-df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, const unsigned char *key
+df_authenticate_general (df_t * d, unsigned char keyno, unsigned char blocklen, const unsigned char *key
 #ifndef	ESP_PLATFORM
                          , const EVP_CIPHER * cipher
 #endif
    )
 {                               // Authenticate for specified key len
-   unsigned char zero[keylen];
+   unsigned char zero[16] = { 0 };
    if (!key)
-   {
-      memset (zero, 0, keylen);
       key = zero;
-   }
-   d->keylen = 0;
+   d->blocklen = 0;
    d->keyno = (keyno & 15);
    const char *e;
    unsigned int rlen;
@@ -576,76 +573,74 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char keylen, co
    unsigned int n = 1;
    wbuf1 (keyno);
    if ((e =
-        df_dx (d, keylen == 8 ? 0x0A : keylen == 24 ? 0x1A : 0xAA, sizeof (buf), buf, n, 0, 0, &rlen,
-               keylen == 8 ? "Authenticate DES" : keylen == 24 ? "Authenticate 3DES" : "Authenticate AES")))
+        df_dx (d, blocklen == 8 ? 0x1A : 0xAA, sizeof (buf), buf, n, 0, 0, &rlen,
+               blocklen == 8 ? "Authenticate DES" : "Authenticate AES")))
       return e;
-   if (keylen == 24)
-      keylen = 8;               // 3DES - actual key may be 24 but blocks are 8
-   if (rlen != keylen + 1)
+   if (rlen != blocklen + 1)
       return "Bad response length for auth";
-   fill_random (d->sk1, keylen);
+   fill_random (d->sk1, blocklen);
    // Decode B value
-   memset (d->cmac, 0, keylen);
-   decrypt (d->ctx, cipher, keylen, key, d->cmac, d->sk2, buf + 1, keylen);
+   memset (d->cmac, 0, blocklen);
+   decrypt (d->ctx, cipher, blocklen, key, d->cmac, d->sk2, buf + 1, blocklen);
    // Make response A+B'
-   memcpy (buf + 1, d->sk1, keylen);
-   memcpy (buf + keylen + 1, d->sk2 + 1, keylen - 1);
-   buf[keylen * 2] = d->sk2[0];
+   memcpy (buf + 1, d->sk1, blocklen);
+   memcpy (buf + blocklen + 1, d->sk2 + 1, blocklen - 1);
+   buf[blocklen * 2] = d->sk2[0];
    // Encrypt response
-   doencrypt (d->ctx, cipher, keylen, key, d->cmac, buf + 1, buf + 1, keylen * 2);
+   doencrypt (d->ctx, cipher, blocklen, key, d->cmac, buf + 1, buf + 1, blocklen * 2);
    // Send response
-   if ((e = df_dx (d, 0xAF, sizeof (buf), buf, 1 + keylen * 2, 0, 0, &rlen, "Handshake")))
+   if ((e = df_dx (d, 0xAF, sizeof (buf), buf, 1 + blocklen * 2, 0, 0, &rlen, "Handshake")))
       return e;
-   if (rlen != keylen + 1)
+   if (rlen != blocklen + 1)
       return "Bad response length for auth";
    // Decode reply A'
-   if ((e = decrypt (d->ctx, cipher, keylen, key, d->cmac, buf + 1, buf + 1, keylen)))
+   if ((e = decrypt (d->ctx, cipher, blocklen, key, d->cmac, buf + 1, buf + 1, blocklen)))
       return e;
    // Check A'
-   if (memcmp (buf + 1, d->sk1 + 1, keylen - 1) || buf[keylen] != d->sk1[0])
+   if (memcmp (buf + 1, d->sk1 + 1, blocklen - 1) || buf[blocklen] != d->sk1[0])
       return "Auth failed";
    // Mark as logged in
 #ifndef ESP_PLATFORM
    d->cipher = cipher;
 #endif
-   d->keylen = keylen;
-   dump ("A", keylen, d->sk1);
-   dump ("B", keylen, d->sk2);
+   d->blocklen = blocklen;
+   dump ("A", blocklen, d->sk1);
+   dump ("B", blocklen, d->sk2);
    memcpy (d->sk0 + 0, d->sk1 + 0, 4);
    memcpy (d->sk0 + 4, d->sk2 + 0, 4);
-   if (keylen > 8)
+   if (blocklen > 8)
    {
       memcpy (d->sk0 + 8, d->sk1 + 12, 4);
       memcpy (d->sk0 + 12, d->sk2 + 12, 4);
    }
    // Make SK1
-   memset (d->cmac, 0, keylen);
-   memset (d->sk1, 0, keylen);
-   if ((e = doencrypt (d->ctx, cipher, keylen, d->sk0, d->cmac, d->sk1, d->sk1, keylen)))
+   memset (d->cmac, 0, blocklen);
+   memset (d->sk1, 0, blocklen);
+   if ((e = doencrypt (d->ctx, cipher, blocklen, d->sk0, d->cmac, d->sk1, d->sk1, blocklen)))
       return e;
    // Shift SK1
    unsigned char xor = 0;
    if (d->sk1[0] & 0x80)
-      xor = (keylen == 8 ? 0x1B : 0x87);
-   for (n = 0; n < keylen - 1; n++)
+      xor = (blocklen == 8 ? 0x1B : 0x87);
+   for (n = 0; n < blocklen - 1; n++)
       d->sk1[n] = (d->sk1[n] << 1) | (d->sk1[n + 1] >> 7);
-   d->sk1[keylen - 1] <<= 1;
-   d->sk1[keylen - 1] ^= xor;
+   d->sk1[blocklen - 1] <<= 1;
+   d->sk1[blocklen - 1] ^= xor;
    // Make SK2
-   memcpy (d->sk2, d->sk1, keylen);
+   memcpy (d->sk2, d->sk1, blocklen);
    // Shift SK2
    xor = 0;
    if (d->sk2[0] & 0x80)
-      xor = (keylen == 8 ? 0x1B : 0x87);
-   for (n = 0; n < keylen - 1; n++)
+      xor = (blocklen == 8 ? 0x1B : 0x87);
+   for (n = 0; n < blocklen - 1; n++)
       d->sk2[n] = (d->sk2[n] << 1) | (d->sk2[n + 1] >> 7);
-   d->sk2[keylen - 1] <<= 1;
-   d->sk2[keylen - 1] ^= xor;
+   d->sk2[blocklen - 1] <<= 1;
+   d->sk2[blocklen - 1] ^= xor;
    // Reset CMAC
-   memset (d->cmac, 0, keylen);
-   dump ("SK0", keylen, d->sk0);
-   dump ("SK1", keylen, d->sk1);
-   dump ("SK2", keylen, d->sk2);
+   memset (d->cmac, 0, blocklen);
+   dump ("SK0", blocklen, d->sk0);
+   dump ("SK1", blocklen, d->sk1);
+   dump ("SK2", blocklen, d->sk2);
    return NULL;
 }
 
@@ -662,23 +657,15 @@ df_authenticate (df_t * d, unsigned char keyno, const unsigned char key[16])
 int
 df_isauth (df_t * d)
 {                               // Is authenticated
-   return d->keylen;            // Set when authentication is complete, and cleared for cases that lose it
+   return d->blocklen;          // Set when authentication is complete, and cleared for cases that lose it
 }
 
 #ifndef	ESP_PLATFORM
 const char *
-df_des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[8])
-{                               // Authenticate with DES - used to convert card to AES
-   return df_authenticate_general (d, keyno, 8, key, EVP_des_cbc ());
-}
-#endif
-
-#ifndef	ESP_PLATFORM
-const char *
-df_3des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[24])
+df_des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[16])
 {                               // Authenticate with 3DES - used to convert card to AES
-   const char *ret = df_authenticate_general (d, keyno, 24, key, EVP_des_ede3_cbc ());
-   d->cipher = EVP_des_cbc ();  // Ongoing is simple DES not 3DES
+   const char *ret = df_authenticate_general (d, keyno, 24, key, EVP_des_ede_cbc ());
+   d->cipher = EVP_des_cbc ();  // Ongoing is simple DES not 2TDEA
    return ret;
 }
 #endif
@@ -686,7 +673,7 @@ df_3des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[24]
 const char *
 df_change_file_settings (df_t * d, unsigned char fileno, unsigned char comms, unsigned short oldaccess, unsigned short access)
 {                               // Change settings for current key
-   if (!d->keylen)
+   if (!d->blocklen)
       return "Not authenticated";
    unsigned char buf[32];
    unsigned int n = 1;
@@ -699,7 +686,7 @@ df_change_file_settings (df_t * d, unsigned char fileno, unsigned char comms, un
 const char *
 df_change_key_settings (df_t * d, unsigned char settings)
 {                               // Change settings for current key
-   if (!d->keylen)
+   if (!d->blocklen)
       return "Not authenticated";
    unsigned char buf[32];
    unsigned int n = 1;
@@ -710,7 +697,7 @@ df_change_key_settings (df_t * d, unsigned char settings)
 const char *
 df_set_configuration (df_t * d, unsigned char settings)
 {                               // Change settings for current key
-   if (!d->keylen)
+   if (!d->blocklen)
       return "Not authenticated";
    unsigned char buf[32];
    unsigned int n = 1;
@@ -746,7 +733,7 @@ df_change_key (df_t * d, unsigned char keyno, unsigned char version, const unsig
    if ((e = df_dx (d, *buf, sizeof (buf), buf, n, 2, 0, NULL, "Change Key")))
       return e;
    if (keyno == d->keyno)
-      d->keylen = 0;            // No longer secure;
+      d->blocklen = 0;          // No longer secure;
    return NULL;
 }
 
@@ -764,7 +751,7 @@ df_format (df_t * d, unsigned char version, const unsigned char key[16])
    const unsigned char *currentkey = NULL;
    const char *e = NULL;
    // Get out of existing application / session first
-   if ((d->keylen || d->aid[0] || d->aid[1] || d->aid[1]) && (e = df_select_application (d, NULL)))
+   if ((d->blocklen || d->aid[0] || d->aid[1] || d->aid[1]) && (e = df_select_application (d, NULL)))
       return e;
    e = "Not formatted";
    // Try supplied key
@@ -778,9 +765,7 @@ df_format (df_t * d, unsigned char version, const unsigned char key[16])
 #ifndef	ESP_PLATFORM
    else
    {                            // If all else fails, try DES with zero key
-      e = df_3des_authenticate (d, 0, currentkey = zero);       // Try 3DES first
-      if (e)
-         e = df_des_authenticate (d, 0, currentkey = zero);     // Surprised if this is ever needed
+      e = df_des_authenticate (d, 0, currentkey = zero);
       if (!e)
          e = df_dx (d, 0xFC, 0, NULL, 1, 0, 0, NULL, "Format"); // Format the card anyway in case DES had stuff
       if (!e)
@@ -885,7 +870,7 @@ df_delete_file (df_t * d, unsigned char fileno)
 const char *
 df_get_uid (df_t * d, unsigned char uid[7])
 {
-   if (!d->keylen)
+   if (!d->blocklen)
       return "Not authenticated";
    unsigned char buf[64];
    const char *e = df_dx (d, 0x51, sizeof (buf), buf, 1, 0, 8, NULL, "Get UID");

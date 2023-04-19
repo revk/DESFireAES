@@ -38,7 +38,7 @@ struct df_s {
    EVP_CIPHER_CTX *ctx;
    const EVP_CIPHER *cipher;    // Current cipher DES or AES (DES used for formatting to AES)
 #endif
-   unsigned char keylen;        // Current key length (0 if not logged in)
+   unsigned char blocklen;      // Current block length (0 if not logged in), 8 means DES, 16 means AES
    unsigned char keyno;         // Current auth key no
    unsigned char sk0[16];       // Session key
    unsigned char sk1[16];       // CMAC Sub key 1
