@@ -41,5 +41,9 @@ main (int argc, const char *argv[])
       poptFreeContext (optCon);
    }
 
+   const char *fail = df_check_des ();
+   if (fail)
+      errx (0, "Fail: %s", fail);
+
    return 0;
 }
