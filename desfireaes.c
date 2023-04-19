@@ -78,7 +78,7 @@ fill_random (unsigned char *buf, size_t size)
 #define decrypt(ctx,cipher,blocklen,key,iv,out,in,len) aes_decrypt(key,iv,out,in,len)
 static const char *
 aes_decrypt (const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
-{ // Always AES
+{                               // Always AES
    if (len <= 0)
       return NULL;
    len = (len + 15) / 16 * 16;
@@ -121,7 +121,7 @@ decrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int blocklen, const un
 #define doencrypt(ctx,cipher,blocklen,key,iv,out,in,len) aes_encrypt(key,iv,out,in,len)
 static const char *
 aes_encrypt (const unsigned char *key, unsigned char *iv, unsigned char *out, const unsigned char *in, int len)
-{ // Always AES
+{                               // Always AES
    if (len <= 0)
       return NULL;
    len = (len + 15) / 16 * 16;
@@ -134,7 +134,7 @@ aes_encrypt (const unsigned char *key, unsigned char *iv, unsigned char *out, co
    {
       unsigned char *o = out;
       if (!out)
-         o = malloc (len);     
+         o = malloc (len);
       err = esp_aes_crypt_cbc (&ctx, ESP_AES_ENCRYPT, len, iv, in, o);
       if (!out)
          free (o);
@@ -155,7 +155,7 @@ doencrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int blocklen, const 
       return "Encrypt error";
    unsigned char *o = out;
    if (!out)
-      o = malloc (len);       
+      o = malloc (len);
    EVP_CIPHER_CTX_set_padding (ctx, 0);
    int n;
    if (EVP_EncryptUpdate (ctx, o, &n, in, len) != 1 || EVP_EncryptFinal_ex (ctx, o + n, &n) != 1)
@@ -339,7 +339,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
    dump ("Tx", len, buf);
    if (cmd == 0xAA || cmd == 0x1A || cmd == 0x0A || cmd == 0x5A)
       d->blocklen = 0;
-   if (d->blocklen)
+   if (df_isauth (d))
    {                            // Authenticated
       if (txenc == 0xFF)
       {                         // Append CMAC
@@ -385,12 +385,12 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
          dump ("Rx(raw)", b, p);
          if (!b)
          {
-            d->blocklen = 0;
+            df_deauth (d);
             return "";          // Card gone
          }
          if (*p != 0xAF)
          {
-            d->blocklen = 0;
+            df_deauth (d);
             return "Tx expected AF";
          }
          p += TXMAX;
@@ -416,7 +416,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
          dump ("Rx(raw)", b, p);
          if (!b)
          {
-            d->blocklen = 0;
+            df_deauth (d);
             return "";          // Card gone
          }
          if (p > buf)
@@ -438,7 +438,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
       len = p - buf;
    }
    // Post process
-   if (d->blocklen)
+   if (df_isauth (d))
    {
       if (rxenc)
       {                         // Encrypted
@@ -470,7 +470,7 @@ df_dx (df_t * d, unsigned char cmd, unsigned int max, unsigned char *buf, unsign
    // Check response
    if (*buf && *buf != 0xAF)
    {
-      d->blocklen = 0;          // Errors kick us out
+      df_deauth (d);            // Errors kick us out
       return df_err (*buf);
    }
    dump ("Rx", len, buf);
@@ -501,7 +501,7 @@ df_select_application (df_t * d, const unsigned char aid[3])
       memset (d->aid, 0, sizeof (d->aid));
    else
       memcpy (d->aid, aid, sizeof (d->aid));
-   d->blocklen = 0;
+   df_deauth (d);               // Selecting app de-auth's as we need to auth with app key
    return e;
 }
 
@@ -565,7 +565,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char blocklen, 
    unsigned char zero[16] = { 0 };
    if (!key)
       key = zero;
-   d->blocklen = 0;
+   df_deauth (d);
    d->keyno = (keyno & 15);
    const char *e;
    unsigned int rlen;
@@ -614,7 +614,7 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char blocklen, 
       cipher = EVP_des_cbc ();  // Ongoing is simple DES not 2TDEA
    d->cipher = cipher;
 #endif
-   d->blocklen = blocklen;
+   d->blocklen = blocklen;      // Marks as authenticated
    // Make SK1
    memset (d->cmac, 0, blocklen);
    memset (d->sk1, 0, blocklen);
@@ -667,7 +667,7 @@ df_des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[16])
 const char *
 df_change_file_settings (df_t * d, unsigned char fileno, unsigned char comms, unsigned short oldaccess, unsigned short access)
 {                               // Change settings for current key
-   if (!d->blocklen)
+   if (!df_isauth (d))
       return "Not authenticated";
    unsigned char buf[32];
    unsigned int n = 1;
@@ -680,7 +680,7 @@ df_change_file_settings (df_t * d, unsigned char fileno, unsigned char comms, un
 const char *
 df_change_key_settings (df_t * d, unsigned char settings)
 {                               // Change settings for current key
-   if (!d->blocklen)
+   if (!df_isauth (d))
       return "Not authenticated";
    unsigned char buf[32];
    unsigned int n = 1;
@@ -691,7 +691,7 @@ df_change_key_settings (df_t * d, unsigned char settings)
 const char *
 df_set_configuration (df_t * d, unsigned char settings)
 {                               // Change settings for current key
-   if (!d->blocklen)
+   if (!df_isauth (d))
       return "Not authenticated";
    unsigned char buf[32];
    unsigned int n = 1;
@@ -727,7 +727,7 @@ df_change_key (df_t * d, unsigned char keyno, unsigned char version, const unsig
    if ((e = df_dx (d, *buf, sizeof (buf), buf, n, 2, 0, NULL, "Change Key")))
       return e;
    if (keyno == d->keyno)
-      d->blocklen = 0;          // No longer secure;
+      df_deauth (d);            // No longer secure
    return NULL;
 }
 
@@ -745,7 +745,7 @@ df_format (df_t * d, unsigned char version, const unsigned char key[16])
    const unsigned char *currentkey = NULL;
    const char *e = NULL;
    // Get out of existing application / session first
-   if ((d->blocklen || d->aid[0] || d->aid[1] || d->aid[1]) && (e = df_select_application (d, NULL)))
+   if ((df_isauth (d) || d->aid[0] || d->aid[1] || d->aid[1]) && (e = df_select_application (d, NULL)))
       return e;
    e = "Not formatted";
    // Try supplied key
@@ -864,7 +864,7 @@ df_delete_file (df_t * d, unsigned char fileno)
 const char *
 df_get_uid (df_t * d, unsigned char uid[7])
 {
-   if (!d->blocklen)
+   if (!df_isauth (d))
       return "Not authenticated";
    unsigned char buf[64];
    const char *e = df_dx (d, 0x51, sizeof (buf), buf, 1, 0, 8, NULL, "Get UID");
