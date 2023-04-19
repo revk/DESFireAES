@@ -656,12 +656,6 @@ df_authenticate (df_t * d, unsigned char keyno, const unsigned char key[16])
       );
 }
 
-int
-df_isauth (df_t * d)
-{                               // Is authenticated
-   return d->blocklen;          // Set when authentication is complete, and cleared for cases that lose it
-}
-
 #ifndef	ESP_PLATFORM
 const char *
 df_des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[16])

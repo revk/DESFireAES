@@ -128,7 +128,7 @@ const char *df_authenticate(df_t *, unsigned char keyno, const unsigned char key
 const char * df_des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[16]);
 #endif
 // Confirm if authenticated
-int df_isauth(df_t *);
+#define	df_isauth(d)	((d)->blocklen)
 // Get Key Version
 const char *df_get_key_version(df_t * d, unsigned char keyno, unsigned char *version);
 // Get Key settings
