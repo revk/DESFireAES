@@ -38,7 +38,7 @@ struct df_s {
    EVP_CIPHER_CTX *ctx;
    const EVP_CIPHER *cipher;    // Current cipher DES or AES (DES used for formatting to AES)
 #endif
-   unsigned char keylen;        // Current key length (0 if not logged in)
+   unsigned char blocklen;      // Current block length (0 if not logged in), 8 means DES, 16 means AES
    unsigned char keyno;         // Current auth key no
    unsigned char sk0[16];       // Session key
    unsigned char sk1[16];       // CMAC Sub key 1
@@ -124,8 +124,13 @@ const char *df_select_application(df_t *, const unsigned char aid[3]);
 const char *df_format(df_t *, unsigned char keyver, const unsigned char key[16]);
 // Authenticate with a key
 const char *df_authenticate(df_t *, unsigned char keyno, const unsigned char key[16]);
+#ifndef ESP_PLATFORM
+const char * df_des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[16]);
+#endif
 // Confirm if authenticated
-int df_isauth(df_t *);
+#define	df_isauth(d)	((d)->blocklen)
+// Mark not auth
+#define	df_deauth(d)	do{(d)->blocklen=0;}while(0)
 // Get Key Version
 const char *df_get_key_version(df_t * d, unsigned char keyno, unsigned char *version);
 // Get Key settings
