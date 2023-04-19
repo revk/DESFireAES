@@ -73,6 +73,57 @@ fill_random (unsigned char *buf, size_t size)
 }
 #endif
 
+#ifndef ESP_PLATFORM
+const char *
+df_check_des (void)
+{                               // Perform a check of DES operation
+   EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new ();
+   const EVP_CIPHER *cipher = EVP_des_cbc ();
+   unsigned char key[8] = { 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
+   unsigned char iv[8] = { 0 };
+   unsigned char in[8] = { 'H', 'E', 'L', 'L', 'O', ' ', 'M', 'E' };
+   unsigned char out[8] = { 0 };
+   unsigned char expect[8] = { 0x94, 0x6A, 0x63, 0xE2, 0xBB, 0xCC, 0x76, 0x10 };
+   unsigned char dout[8] = { 0 };
+   int len = 8,
+      n;
+   if (EVP_EncryptInit_ex (ctx, cipher, NULL, key, iv) != 1)
+      return "Encrypt init error";
+   EVP_CIPHER_CTX_set_padding (ctx, 0);
+   if (EVP_EncryptUpdate (ctx, out, &n, in, len) != 1 || EVP_EncryptFinal_ex (ctx, out + n, &n) != 1)
+      return "Encrypt error";
+   if (memcmp (out, expect, 8))
+   {
+	                fprintf(stderr,"Encrypt not correct\nOutput:");
+      for (int i = 0; i < 8; i++)
+         fprintf (stderr, " %02X", out[i]);
+      fprintf (stderr, "\nExpect:");
+      for (int i = 0; i < 8; i++)
+         fprintf (stderr, " %02X", expect[i]);
+      fprintf(stderr,"\n");
+      return "DES encrypt failed";
+   }
+   memset (iv, 0, 8);
+   if (EVP_DecryptInit_ex (ctx, cipher, NULL, key, iv) != 1)
+      return "Decrypt init error";
+   EVP_CIPHER_CTX_set_padding (ctx, 0);
+   if (EVP_DecryptUpdate (ctx, dout, &n, out, len) != 1 || EVP_DecryptFinal_ex (ctx, dout + n, &n) != 1)
+      return "Decrypt error";
+   if (memcmp (dout, in, 8))
+   {
+	   fprintf(stderr,"Decrypt not correct\nOutput:");
+      for (int i = 0; i < 8; i++)
+         fprintf (stderr, " %02X", dout[i]);
+      fprintf (stderr, "\nExpect:");
+      for (int i = 0; i < 8; i++)
+         fprintf (stderr, " %02X", in[i]);
+      fprintf(stderr,"\n");
+      return "DES decrypt failed";
+   }
+   return NULL;
+}
+#endif
+
 // Decrypt, updating iv
 #ifdef ESP_PLATFORM
 #define decrypt(ctx,cipher,blocklen,key,iv,out,in,len) aes_decrypt(key,iv,out,in,len)
@@ -104,12 +155,10 @@ decrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int blocklen, const un
    unsigned char newiv[blocklen];
    memcpy (newiv, in + len - blocklen, blocklen);
    if (EVP_DecryptInit_ex (ctx, cipher, NULL, key, iv) != 1)
-      return "Decrypt error";
+      return "Decrypt init error";
    EVP_CIPHER_CTX_set_padding (ctx, 0);
    int n;
-   if (EVP_DecryptUpdate (ctx, out, &n, in, len) != 1)
-      return "Decrypt error";
-   if (EVP_DecryptFinal_ex (ctx, out + n, &n) != 1)
+   if (EVP_DecryptUpdate (ctx, out, &n, in, len) != 1 || EVP_DecryptFinal_ex (ctx, out + n, &n) != 1)
       return "Decrypt error";
    memcpy (iv, newiv, blocklen);
    return NULL;
@@ -152,7 +201,7 @@ doencrypt (EVP_CIPHER_CTX * ctx, const EVP_CIPHER * cipher, int blocklen, const 
 {
    len = (len + blocklen - 1) / blocklen * blocklen;
    if (EVP_EncryptInit_ex (ctx, cipher, NULL, key, iv) != 1)
-      return "Encrypt error";
+      return "Encrypt init error";
    unsigned char *o = out;
    if (!out)
       o = malloc (len);
@@ -1081,3 +1130,54 @@ df_debit (df_t * d, unsigned char fileno, unsigned char comms, unsigned int delt
    wbuf4 (delta);
    return df_dx (d, 0xDC, sizeof (buf), buf, n, (comms & DF_MODE_CMAC) ? 0xFF : 0, 0, NULL, "Debit");
 }
+
+#ifndef	LIB
+
+/// Test system
+
+#include <stdio.h>
+#include <string.h>
+#include <popt.h>
+#include <time.h>
+#include <sys/time.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <err.h>
+
+int debug = 0;
+
+int
+main (int argc, const char *argv[])
+{
+   {                            // POPT
+      poptContext optCon;       // context for parsing command-line options
+      const struct poptOption optionsTable[] = {
+//      {"string", 's', POPT_ARG_STRING, &string, 0, "String", "string"},
+//      {"string-default", 'S', POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &string, 0, "String", "string"},
+         {"debug", 'v', POPT_ARG_NONE, &debug, 0, "Debug"},
+         POPT_AUTOHELP {}
+      };
+
+      optCon = poptGetContext (NULL, argc, argv, optionsTable, 0);
+      //poptSetOtherOptionHelp (optCon, "");
+
+      int c;
+      if ((c = poptGetNextOpt (optCon)) < -1)
+         errx (1, "%s: %s\n", poptBadOption (optCon, POPT_BADOPTION_NOALIAS), poptStrerror (c));
+
+      if (poptPeekArg (optCon))
+      {
+         poptPrintUsage (optCon, stderr, 0);
+         return -1;
+      }
+      poptFreeContext (optCon);
+   }
+
+   const char *e = df_check_des ();
+   if (e)
+      errx (1, "DES failed %s", e);
+
+   return 0;
+}
+
+#endif
