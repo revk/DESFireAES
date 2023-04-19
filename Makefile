@@ -25,7 +25,7 @@ nfc: nfc.c desfireaes.o pn532.o include/desfireaes.h pn532.h AJL/ajl.o AJL/ajl.h
 	gcc -fPIC -O -o $@ -Iinclude $< desfireaes.o pn532.o ${INCLUDES} ${LIBS} -lcrypto -lssl -lpopt AJL/ajl.o -IAJL
 
 desfireaes.o: desfireaes.c
-	gcc -fPIC -O -DLIB -c -o $@ -Iinclude $< ${INCLUDES}
+	gcc -fPIC -O -DDFLIB -c -o $@ -Iinclude $< ${INCLUDES}
 
 desfireaes: desfireaes.c
 	gcc -fPIC -O -o $@ -Iinclude $< ${INCLUDES} -lcrypto -lssl -lpopt

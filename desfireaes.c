@@ -1131,7 +1131,7 @@ df_debit (df_t * d, unsigned char fileno, unsigned char comms, unsigned int delt
    return df_dx (d, 0xDC, sizeof (buf), buf, n, (comms & DF_MODE_CMAC) ? 0xFF : 0, 0, NULL, "Debit");
 }
 
-#ifndef	LIB
+#ifndef	DFLIB
 
 /// Test system
 
