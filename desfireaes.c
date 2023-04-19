@@ -129,7 +129,7 @@ aes_encrypt (const unsigned char *key, unsigned char *iv, unsigned char *out, co
    //ESP_LOG_BUFFER_HEX_LEVEL ("AES In ", in, len, ESP_LOG_INFO);
    esp_aes_context ctx;
    esp_aes_init (&ctx);
-   esp_err_t err = esp_aes_setkey (&ctx, key, blocklen * 8);
+   esp_err_t err = esp_aes_setkey (&ctx, key, 16 * 8);
    if (!err)
    {
       unsigned char *o = out;
