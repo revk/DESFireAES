@@ -94,13 +94,13 @@ df_check_des (void)
       return "Encrypt error";
    if (memcmp (out, expect, 8))
    {
-	                fprintf(stderr,"Encrypt not correct\nOutput:");
+      fprintf (stderr, "Encrypt not correct\nOutput:");
       for (int i = 0; i < 8; i++)
          fprintf (stderr, " %02X", out[i]);
       fprintf (stderr, "\nExpect:");
       for (int i = 0; i < 8; i++)
          fprintf (stderr, " %02X", expect[i]);
-      fprintf(stderr,"\n");
+      fprintf (stderr, "\n");
       return "DES encrypt failed";
    }
    memset (iv, 0, 8);
@@ -111,13 +111,13 @@ df_check_des (void)
       return "Decrypt error";
    if (memcmp (dout, in, 8))
    {
-	   fprintf(stderr,"Decrypt not correct\nOutput:");
+      fprintf (stderr, "Decrypt not correct\nOutput:");
       for (int i = 0; i < 8; i++)
          fprintf (stderr, " %02X", dout[i]);
       fprintf (stderr, "\nExpect:");
       for (int i = 0; i < 8; i++)
          fprintf (stderr, " %02X", in[i]);
-      fprintf(stderr,"\n");
+      fprintf (stderr, "\n");
       return "DES decrypt failed";
    }
    return NULL;
@@ -625,35 +625,38 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char blocklen, 
         df_dx (d, blocklen == 8 ? 0x1A : 0xAA, sizeof (buf), buf, n, 0, 0, &rlen,
                blocklen == 8 ? "Authenticate DES" : "Authenticate AES")))
       return e;
-   if (rlen != blocklen + 1)
-      return "Bad response length for auth";
-   fill_random (d->sk1, blocklen);
+   int keylen = rlen - 1;
+   if (keylen != 8 && keylen != 16);
+   return "Bad 1st response length for auth";
+   fill_random (d->sk1, keylen);
    // Decode B value
-   memset (d->cmac, 0, blocklen);
-   decrypt (d->ctx, cipher, blocklen, key, d->cmac, d->sk2, buf + 1, blocklen);
+   memset (d->cmac, 0, keylen);
+   decrypt (d->ctx, cipher, keylen, key, d->cmac, d->sk2, buf + 1, keylen);
    // Make response A+B'
-   memcpy (buf + 1, d->sk1, blocklen);
-   memcpy (buf + blocklen + 1, d->sk2 + 1, blocklen - 1);
-   buf[blocklen * 2] = d->sk2[0];
+   memcpy (buf + 1, d->sk1, keylen);
+   memcpy (buf + keylen + 1, d->sk2 + 1, keylen - 1);
+   buf[keylen * 2] = d->sk2[0];
    // Encrypt response
-   doencrypt (d->ctx, cipher, blocklen, key, d->cmac, buf + 1, buf + 1, blocklen * 2);
+   doencrypt (d->ctx, cipher, keylen, key, d->cmac, buf + 1, buf + 1, keylen * 2);
    // Send response
-   if ((e = df_dx (d, 0xAF, sizeof (buf), buf, 1 + blocklen * 2, 0, 0, &rlen, "Handshake")))
+   if ((e = df_dx (d, 0xAF, sizeof (buf), buf, 1 + keylen * 2, 0, 0, &rlen, "Handshake")))
       return e;
-   if (rlen != blocklen + 1)
-      return "Bad response length for auth";
+   if (rlen != keylen + 1)
+      return "Bad 2nd response length for auth";
    // Decode reply A'
-   if ((e = decrypt (d->ctx, cipher, blocklen, key, d->cmac, buf + 1, buf + 1, blocklen)))
+   if ((e = decrypt (d->ctx, cipher, keylen, key, d->cmac, buf + 1, buf + 1, keylen)))
       return e;
    // Check A'
-   if (memcmp (buf + 1, d->sk1 + 1, blocklen - 1) || buf[blocklen] != d->sk1[0])
+   if (memcmp (buf + 1, d->sk1 + 1, keylen - 1) || buf[keylen] != d->sk1[0])
       return "Auth failed";
    // Mark as logged in
-   dump ("A", blocklen, d->sk1);
-   dump ("B", blocklen, d->sk2);
+   dump ("A", keylen, d->sk1);
+   dump ("B", keylen, d->sk2);
    memcpy (d->sk0 + 0, d->sk1 + 0, 4);
    memcpy (d->sk0 + 4, d->sk2 + 0, 4);
-   if (blocklen > 8)
+   if (keylen == 8)
+      memcpy (d->sk0 + 8, d->sk0, 8);   //  Allow use of DES_EDE as DES
+   else
    {
       memcpy (d->sk0 + 8, d->sk1 + 12, 4);
       memcpy (d->sk0 + 12, d->sk2 + 12, 4);
@@ -663,33 +666,38 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char blocklen, 
 #endif
    d->blocklen = blocklen;      // Marks as authenticated
    // Make SK1
-   memset (d->cmac, 0, blocklen);
-   memset (d->sk1, 0, blocklen);
-   if ((e = doencrypt (d->ctx, cipher, blocklen, d->sk0, d->cmac, d->sk1, d->sk1, blocklen)))
+   memset (d->cmac, 0, keylen);
+   memset (d->sk1, 0, keylen);
+   if ((e = doencrypt (d->ctx, cipher, keylen, d->sk0, d->cmac, d->sk1, d->sk1, keylen)))
       return e;
    // Shift SK1
    unsigned char xor = 0;
    if (d->sk1[0] & 0x80)
-      xor = (blocklen == 8 ? 0x1B : 0x87);
-   for (n = 0; n < blocklen - 1; n++)
+      xor = (keylen == 8 ? 0x1B : 0x87);
+   for (n = 0; n < keylen - 1; n++)
       d->sk1[n] = (d->sk1[n] << 1) | (d->sk1[n + 1] >> 7);
-   d->sk1[blocklen - 1] <<= 1;
-   d->sk1[blocklen - 1] ^= xor;
+   d->sk1[keylen - 1] <<= 1;
+   d->sk1[keylen - 1] ^= xor;
    // Make SK2
-   memcpy (d->sk2, d->sk1, blocklen);
+   memcpy (d->sk2, d->sk1, keylen);
    // Shift SK2
    xor = 0;
    if (d->sk2[0] & 0x80)
-      xor = (blocklen == 8 ? 0x1B : 0x87);
-   for (n = 0; n < blocklen - 1; n++)
+      xor = (keylen == 8 ? 0x1B : 0x87);
+   for (n = 0; n < keylen - 1; n++)
       d->sk2[n] = (d->sk2[n] << 1) | (d->sk2[n + 1] >> 7);
-   d->sk2[blocklen - 1] <<= 1;
-   d->sk2[blocklen - 1] ^= xor;
+   d->sk2[keylen - 1] <<= 1;
+   d->sk2[keylen - 1] ^= xor;
+   if (keylen == 8)
+   {                            // Allow use of DES_EDE as DES
+      memcpy (d->sk1 + 8, d->sk1, 8);
+      memcpy (d->sk2 + 8, d->sk2, 8);
+   }
+   dump ("SK0", keylen, d->sk0);
+   dump ("SK1", keylen, d->sk1);
+   dump ("SK2", keylen, d->sk2);
    // Reset CMAC
-   memset (d->cmac, 0, blocklen);
-   dump ("SK0", blocklen, d->sk0);
-   dump ("SK1", blocklen, d->sk1);
-   dump ("SK2", blocklen, d->sk2);
+   memset (d->cmac, 0, keylen);
    return NULL;
 }
 
@@ -707,7 +715,7 @@ df_authenticate (df_t * d, unsigned char keyno, const unsigned char key[16])
 const char *
 df_des_authenticate (df_t * d, unsigned char keyno, const unsigned char key[8])
 {                               // Authenticate with 3DES - used to convert card to AES
-   return df_authenticate_general (d, keyno, 8, key, EVP_des_cbc ());
+   return df_authenticate_general (d, keyno, 8, key, EVP_des_ede_cbc ());
 }
 #endif
 
