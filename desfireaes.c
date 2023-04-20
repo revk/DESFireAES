@@ -626,8 +626,8 @@ df_authenticate_general (df_t * d, unsigned char keyno, unsigned char blocklen, 
                blocklen == 8 ? "Authenticate DES" : "Authenticate AES")))
       return e;
    int keylen = rlen - 1;
-   if (keylen != 8 && keylen != 16);
-   return "Bad 1st response length for auth";
+   if (keylen != 8 && keylen != 16)
+      return "Bad 1st response length for auth";
    fill_random (d->sk1, keylen);
    // Decode B value
    memset (d->cmac, 0, keylen);
