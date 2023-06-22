@@ -17,8 +17,8 @@ int debug = 0;
 int
 main (int argc, const char *argv[])
 {
+   poptContext optCon;          // context for parsing command-line options
    {                            // POPT
-      poptContext optCon;       // context for parsing command-line options
       const struct poptOption optionsTable[] = {
 //      {"string", 's', POPT_ARG_STRING, &string, 0, "String", "string"},
 //      {"string-default", 'S', POPT_ARG_STRING | POPT_ARGFLAG_SHOW_DEFAULT, &string, 0, "String", "string"},
@@ -38,12 +38,12 @@ main (int argc, const char *argv[])
          poptPrintUsage (optCon, stderr, 0);
          return -1;
       }
-      poptFreeContext (optCon);
    }
 
    const char *fail = df_check_des ();
    if (fail)
       errx (0, "Fail: %s", fail);
 
+   poptFreeContext (optCon);
    return 0;
 }

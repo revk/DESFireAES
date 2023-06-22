@@ -153,8 +153,8 @@ main (int argc, const char *argv[])
    const char *filedata = NULL;
    const char *filehex = NULL;
    const char *fileaccess = "0000";
+   poptContext optCon;
    {
-      poptContext optCon;
       const struct poptOption optionsTable[] = {
          {"port", 'p', POPT_ARG_STRING, &port, 0, "Port", "/dev/cu.usbserial-..."},
          {"remove", 0, POPT_ARG_NONE, &remove, 0, "Wait for card to be removed"},
@@ -225,7 +225,6 @@ main (int argc, const char *argv[])
          poptPrintUsage (optCon, stderr, 0);
          return -1;
       }
-      poptFreeContext (optCon);
    }
    hex (master, 17, "Key version and 16 byte AES key data");
    hex (aid, 3, "Application ID");
@@ -497,5 +496,6 @@ main (int argc, const char *argv[])
       while (pn532_Present (s) > 0);
    close (s);
    s = -1;
+   poptFreeContext (optCon);
    return 0;
 }
